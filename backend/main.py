@@ -26,13 +26,11 @@ def motor_fisica():
         try:
             sistema.tick_tiempo() 
             
-            # 1. ¿Necesitamos más taxis?
-            sistema.gestionar_abastecimiento()
-            
-            # 2. ¿Hay taxis libres y gente esperando? ¡Juntarlos! (ESTO ES LO NUEVO)
-            sistema.procesar_despacho_automatico()
+            # FASE 1: GESTIÓN Y DESPACHO INICIAL
+            sistema.gestionar_abastecimiento() # ¿Contratamos?
+            sistema.procesar_despacho_automatico() # ¿Asignamos?
 
-            # 3. Mover los que están ocupados
+            # FASE 2: MOVIMIENTO
             with sistema.mutex_taxis:
                 taxis_activos = [t for t in sistema.taxis if t.estado == "OCUPADO" and t.destino_actual]
             
@@ -43,18 +41,23 @@ def motor_fisica():
                 try:
                     llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
                     if llegado:
-                        # Finalizamos viaje
+                        # Finalizar viaje actual
                         sistema.finalizar_viaje(taxi, random.uniform(10, 50))
                         
-                        # Al terminar, volvemos a intentar coger de la cola inmediatamente
+                        # INTENTO INMEDIATO DE REENGANCHE
                         with sistema.mutex_taxis:
                             trabajo_nuevo = sistema.asignar_trabajo_de_cola(taxi)
                             if not trabajo_nuevo:
                                 taxi.estado = "LIBRE"
                                 taxi.destino_actual = None
+                            # Si hubo trabajo nuevo, el estado sigue siendo OCUPADO y tiene nuevo destino
                             
                 except Exception as e:
                     print(f"Error taxi {taxi.id}: {e}")
+
+            # FASE 3: DESPACHO FINAL (Red de seguridad)
+            # Por si acaso algún taxi quedó libre en un momento raro
+            sistema.procesar_despacho_automatico()
         
         except Exception as e:
             print(f"Error motor: {e}")

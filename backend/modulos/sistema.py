@@ -26,42 +26,50 @@ class SistemaUnieTaxi:
     def tick_tiempo(self):
         self.tiempo_actual += timedelta(minutes=20)
 
-    # --- NUEVA FUNCIÓN: EL DESPACHADOR ---
+    # --- DESPACHADOR CENTRAL ---
     def procesar_despacho_automatico(self):
-        """
-        Revisa constantemente si hay Taxis Libres Y Clientes en Cola 
-        para asignarlos inmediatamente.
-        """
+        """Asigna taxis libres a clientes en espera."""
         with self.mutex_taxis:
-            # Si no hay nadie esperando, no hacemos nada
-            if not self.cola_espera:
-                return
+            # Si no hay nadie esperando o no hay taxis, salimos rápido
+            if not self.cola_espera: return
 
-            # Buscamos todos los taxis libres
+            # Buscamos LIBRES
             taxis_libres = [t for t in self.taxis if t.estado == "LIBRE"]
             
-            # Mientras haya taxis libres Y gente en la cola...
+            # Asignamos en bucle hasta que se acaben los taxis o la cola
             while taxis_libres and self.cola_espera:
-                # Cogemos el primer taxi libre y le asignamos trabajo
                 taxi = taxis_libres.pop(0)
-                self.asignar_trabajo_de_cola(taxi)
-                print(f"[DESPACHO] Taxi {taxi.id} activado desde estado LIBRE para atender cola.")
+                exito = self.asignar_trabajo_de_cola(taxi)
+                if exito:
+                    print(f"[DESPACHO] 🔗 Taxi {taxi.id} emparejado con cola.")
 
+    # --- GERENTE (CON DIAGNÓSTICO) ---
     def gestionar_abastecimiento(self):
-        LIMITE_FLOTA = 20 
+        LIMITE_FLOTA = 50  # <--- SUBIDO A 50
         TIEMPO_ENTRE_CONTRATACIONES = 0.5 
         ahora_real = datetime.now() 
 
         with self.mutex_taxis:
-            if len(self.taxis) >= LIMITE_FLOTA: return 
+            cola_len = len(self.cola_espera)
             
-            segundos_pasados = (ahora_real - self.ultimo_refuerzo).total_seconds()
-            if segundos_pasados < TIEMPO_ENTRE_CONTRATACIONES: return 
+            # Solo actuamos si hay "presión" (cola >= 5)
+            if cola_len < 5: return
 
-            if len(self.cola_espera) >= 5:
-                print(f"[GERENCIA] ⚡ Contratación Exprés. Cola: {len(self.cola_espera)}")
-                self.registrar_taxi("Refuerzo-Flash", f"R-{random.randint(100,999)}")
-                self.ultimo_refuerzo = ahora_real
+            # 1. CHECK LÍMITE
+            if len(self.taxis) >= LIMITE_FLOTA:
+                # Opcional: Descomenta para ver si llegaste al tope
+                # print(f"[GERENCIA] ⛔ No se contrata: Límite de flota alcanzado ({len(self.taxis)}/{LIMITE_FLOTA})")
+                return 
+
+            # 2. CHECK TIEMPO
+            segundos_pasados = (ahora_real - self.ultimo_refuerzo).total_seconds()
+            if segundos_pasados < TIEMPO_ENTRE_CONTRATACIONES:
+                return 
+
+            # 3. CONTRATACIÓN
+            print(f"[GERENCIA] ⚡ Contratando refuerzo por cola de {cola_len} pax.")
+            self.registrar_taxi("Refuerzo-Flash", f"R-{random.randint(100,999)}")
+            self.ultimo_refuerzo = ahora_real
 
     def registrar_taxi(self, modelo, placa):
         self.contador_id_taxi += 1
@@ -86,6 +94,8 @@ class SistemaUnieTaxi:
         distancia_minima = float('inf')
 
         with self.mutex_taxis:
+            # Prioridad: Atender cola primero si existe (para mantener orden FIFO)
+            # Pero para simplificar, buscamos libre directo.
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
                     dist = math.sqrt((taxi.x - float(ox))**2 + (taxi.y - float(oy))**2)
@@ -111,11 +121,9 @@ class SistemaUnieTaxi:
         self.clientes_viajando.add(cliente_id)
 
     def asignar_trabajo_de_cola(self, taxi):
-        # Esta función debe estar protegida por mutex externo o interno
-        # Como la llamamos desde sitios que ya tienen mutex, no ponemos 'with mutex' aquí
+        # Esta función asume que ya estamos dentro de un lock (with self.mutex_taxis)
         if self.cola_espera:
             siguiente = self.cola_espera.pop(0) 
-            # print(f"[COLA] Taxi {taxi.id} asignado a Cliente {siguiente['cliente_id']}")
             self._asignar_viaje(
                 taxi, siguiente["cliente_id"], 
                 siguiente["ox"], siguiente["oy"], 
