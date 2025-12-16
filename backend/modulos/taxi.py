@@ -15,26 +15,36 @@ class Taxi:
         self.cliente_actual = None
 
     def actualizar_posicion(self, destino_x, destino_y, velocidad):
-        # 1. Calculamos vector dirección
+        # 1. Calculamos la distancia total al objetivo
         dx = float(destino_x) - self.x
         dy = float(destino_y) - self.y
         distancia = math.sqrt(dx**2 + dy**2)
         
-        # 2. Condición de llegada ESTRICTA (Aquí está el "problema")
-        # Si la velocidad es 5 y la distancia es 3, el taxi saltará a la distancia -2.
-        # Nunca entrará en este 'if' si salta por encima.
-        if distancia < 1.0:
+        # 2. Si ya estamos prácticamente encima, retornamos True
+        if distancia < 0.1:
             self.x = destino_x
             self.y = destino_y
-            return True # Ha llegado
+            return True
 
-        # 3. Movimiento SIN frenado
-        # Normalizamos el vector y multiplicamos por velocidad constante
-        if distancia > 0:
-            vector_x = dx / distancia
-            vector_y = dy / distancia
-            
-            self.x += vector_x * velocidad
-            self.y += vector_y * velocidad
+        # --- TU SOLUCIÓN AQUÍ ---
+        # "Si la velocidad es mayor a la distancia, 
+        # cambiamos la velocidad a la necesaria para recorrer esa distancia"
+        velocidad_turno = velocidad
         
-        return False # Sigue viajando
+        if velocidad > distancia:
+            velocidad_turno = distancia # Frenado exacto
+
+        # 3. Aplicamos el movimiento con la nueva velocidad ajustada
+        # Matemáticamente: (velocidad_turno / distancia) será 1.0 si estamos cerca,
+        # lo que significa que nos movemos el 100% del trayecto restante.
+        if distancia > 0:
+            ratio = velocidad_turno / distancia
+            self.x += dx * ratio
+            self.y += dy * ratio
+
+        # 4. Comprobamos si hemos terminado
+        # Si nuestra velocidad ajustada fue igual a la distancia, hemos llegado.
+        if distancia <= velocidad:
+            return True
+            
+        return False
