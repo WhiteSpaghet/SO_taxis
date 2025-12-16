@@ -20,42 +20,44 @@ sistema = SistemaUnieTaxi()
 # --- ESTADO DE SIMULACIÓN ---
 SIMULACION_ACTIVA = False
 
-# --- HILO 1: MOTOR FÍSICO (Mueve los taxis) ---
+# --- HILO 1: MOTOR FÍSICO (SIMPLIFICADO) ---
 def motor_fisica():
+    print("--- MOTOR FÍSICO INICIADO ---")
     while True:
-        # Bloqueamos la lista el menor tiempo posible
-        with sistema.mutex_taxis:
-            taxis_activos = [t for t in sistema.taxis if t.estado == "OCUPADO" and t.destino_actual]
+        try:
+            time.sleep(0.5) # Ritmo de actualización
+            
+            # Usamos el bloqueo RLock
+            with sistema.mutex_taxis:
+                # Buscamos quién necesita moverse
+                taxis_ocupados = [t for t in sistema.taxis if t.estado == "OCUPADO"]
+                
+                if not taxis_ocupados:
+                    continue # Nadie se mueve, seguimos esperando
 
-        # Procesamos fuera del bloqueo principal o iteramos con cuidado
-        for taxi in taxis_activos:
-            try:
-                dest_x, dest_y = taxi.destino_actual
+                velocidad = 8 if SIMULACION_ACTIVA else 3
                 
-                # Velocidad variable según simulación
-                velocidad = 5 if SIMULACION_ACTIVA else 2 
-                
-                # Movemos el taxi
-                llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
-                
-                if llegado:
-                    # Necesitamos volver a bloquear para modificar estado compartido de forma segura
-                    with sistema.mutex_taxis:
+                for taxi in taxis_ocupados:
+                    if not taxi.destino_actual:
+                        # Si está ocupado pero no tiene destino (error raro), lo liberamos
+                        taxi.estado = "LIBRE"
+                        continue
+
+                    dx, dy = taxi.destino_actual
+                    
+                    # Movemos
+                    llegado = taxi.actualizar_posicion(dx, dy, velocidad)
+                    
+                    if llegado:
+                        # Llegada exitosa
                         taxi.estado = "LIBRE"
                         taxi.destino_actual = None
-                    
-                    # Pagamos (esto ya usa su propio mutex interno)
-                    costo_viaje = random.uniform(10, 50)
-                    sistema.finalizar_viaje(taxi, costo_viaje)
-                        
-            except Exception as e:
-                print(f"[ERROR CRÍTICO EN MOTOR FÍSICO - Taxi {taxi.id}]: {e}")
-                # Si un taxi da error, lo reseteamos para que no congele la simulación
-                with sistema.mutex_taxis:
-                    taxi.estado = "LIBRE"
-                    taxi.destino_actual = None
-        
-        time.sleep(0.5)
+                        costo = random.uniform(10, 50)
+                        sistema.finalizar_viaje(taxi, costo)
+                        print(f"Taxi {taxi.id} llegó a su destino. Ganó ${round(costo, 2)}")
+
+        except Exception as e:
+            print(f"!!! ERROR CRITICO MOTOR: {e}")
 
 # --- HILO 2: GENERADOR AUTOMÁTICO DE CLIENTES (Modo Simulación) ---
 def simulador_clientes():

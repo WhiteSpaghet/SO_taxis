@@ -10,25 +10,26 @@ class SistemaUnieTaxi:
         self.clientes = []  
         self.ganancia_empresa = 0.0
         self.viajes_totales = 0
-        
-        # CONTADORES PERSISTENTES (IDs únicos)
         self.contador_id_taxi = 0 
-        self.contador_id_cliente = 0 # <--- NUEVO
-        
+        self.contador_id_cliente = 0
         self.clientes_viajando = set() 
-        self.mutex_taxis = threading.Lock()
-        self.mutex_contabilidad = threading.Lock()
+
+        # --- CAMBIO IMPORTANTE: USAMOS RLock (Reentrant Lock) ---
+        # Esto evita que el sistema se bloquee si un hilo intenta 
+        # entrar dos veces en la misma habitación.
+        self.mutex_taxis = threading.RLock()
+        self.mutex_contabilidad = threading.RLock()
 
     def registrar_taxi(self, modelo, placa):
         if random.random() < 0.1: return None
         self.contador_id_taxi += 1
-        nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, random.uniform(0, 100), random.uniform(0, 100))
+        # Aseguramos coordenadas float desde el principio
+        nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, float(random.uniform(0, 100)), float(random.uniform(0, 100)))
         with self.mutex_taxis:
             self.taxis.append(nuevo_taxi)
         return nuevo_taxi
 
     def registrar_cliente(self, nombre, tarjeta):
-        # Generamos ID único para clientes también
         self.contador_id_cliente += 1
         nuevo_cliente = Cliente(self.contador_id_cliente, nombre, tarjeta)
         self.clientes.append(nuevo_cliente)
@@ -44,24 +45,18 @@ class SistemaUnieTaxi:
         with self.mutex_taxis:
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
-                    dist = math.sqrt((taxi.x - ox)**2 + (taxi.y - oy)**2)
-                    
-                    # --- CAMBIO AQUÍ: YA NO HAY LÍMITE DE DISTANCIA ---
-                    # Antes: if dist <= 20: ...
-                    # Ahora: Siempre buscamos el menor, esté donde esté.
+                    # Cálculo seguro
+                    dist = math.sqrt((taxi.x - float(ox))**2 + (taxi.y - float(oy))**2)
                     
                     if dist < distancia_minima:
                         distancia_minima = dist
                         mejor_taxi = taxi
-                    elif dist == distancia_minima:
-                        if taxi.calificacion > mejor_taxi.calificacion:
-                            mejor_taxi = taxi
             
             if mejor_taxi:
                 mejor_taxi.estado = "OCUPADO"
-                mejor_taxi.destino_actual = (dx, dy)
-                mejor_taxi.x = ox
-                mejor_taxi.y = oy
+                mejor_taxi.destino_actual = (float(dx), float(dy))
+                mejor_taxi.x = float(ox)
+                mejor_taxi.y = float(oy)
                 mejor_taxi.cliente_actual = cliente_id 
                 self.clientes_viajando.add(cliente_id)
             else:
