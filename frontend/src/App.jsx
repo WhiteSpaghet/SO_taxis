@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react' // <--- AQUÍ ESTABA EL PROBLEMA
 import axios from 'axios'
-
-/* No importamos CSS aquí para evitar errores */
 
 function App() {
   const [tareas, setTareas] = useState([])
   const [nuevoTitulo, setNuevoTitulo] = useState("")
+  
+  // Asegúrate de que este puerto coincide con el que dice tu terminal de Python (uvicorn)
   const API_URL = "http://127.0.0.1:8000"
 
   const cargarTareas = async () => {
