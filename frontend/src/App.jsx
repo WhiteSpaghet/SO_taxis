@@ -1,46 +1,53 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 
-// --- CONFIGURACIÓN ---
 const API_URL = "http://127.0.0.1:8000"
 const mapSize = 500;
 const scale = 5;
 
-// --- ESTILOS ---
+// Estilos
 const panelStyle = { border: '1px solid #ddd', padding: '20px', borderRadius: '8px', background: '#f9f9f9', height: '100%', display: 'flex', flexDirection: 'column' }
 const statBox = { background: 'white', padding: '15px', borderRadius: '5px', border: '1px solid #eee', marginBottom: '15px' }
 const btnStyle = { width: '100%', padding: '10px', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }
 const tabActive = { padding: '10px 20px', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '5px 5px 0 0', fontWeight: 'bold' }
 const tabInactive = { padding: '10px 20px', cursor: 'pointer', background: '#eee', color: '#666', border: 'none', borderRadius: '5px 5px 0 0' }
 
-// --- COMPONENTES HIJOS ---
-
-const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi }) => (
+// Componente ADMIN con botón de Simulación
+const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi, simulacionActiva, toggleSimulacion }) => (
   <div style={panelStyle}>
     <h3>👮‍♂️ Panel de Administración</h3>
     
-    {/* SECCIÓN ESTADÍSTICAS */}
     <div style={statBox}>
       <p>Ganancia Total: <strong>${infoEmpresa.ganancia}</strong></p>
       <p>Viajes Totales: <strong>{infoEmpresa.viajes}</strong></p>
+      
+      {/* BOTÓN DE SIMULACIÓN AUTOMÁTICA */}
+      <div style={{marginTop: 10, paddingTop: 10, borderTop: '1px solid #eee'}}>
+        <button 
+          onClick={() => toggleSimulacion(!simulacionActiva)}
+          style={{...btnStyle, background: simulacionActiva ? '#6f42c1' : '#6c757d'}}
+        >
+          {simulacionActiva ? '🛑 DETENER SIMULACIÓN' : '🤖 INICIAR SIMULACIÓN AUTO'}
+        </button>
+        <small style={{color: '#666'}}>
+          {simulacionActiva ? "Generando clientes automáticamente..." : "Modo Manual"}
+        </small>
+      </div>
+      
       <hr style={{margin: '10px 0', border: '0', borderTop: '1px solid #eee'}}/>
       
       {mejorTaxi ? (
         <div style={{background: '#fff8e1', padding: '10px', borderRadius: '5px', border: '1px solid #ffe082'}}>
           <span>🏆 <strong>Empleado del Mes:</strong></span><br/>
-          Taxi #{mejorTaxi.id} ({mejorTaxi.modelo})<br/>
-          <strong>Ganado: ${mejorTaxi.ganancias}</strong>
+          #{mejorTaxi.id} ({mejorTaxi.modelo}) - ${mejorTaxi.ganancias}
         </div>
-      ) : (
-        <p style={{color: '#999', fontStyle: 'italic'}}>Sin datos de ganancias aún.</p>
-      )}
+      ) : <p style={{color: '#999', fontStyle: 'italic'}}>Sin datos.</p>}
     </div>
 
     <button onClick={registrarTaxi} style={{...btnStyle, background: '#007bff'}}>
       ➕ Contratar Nuevo Taxi
     </button>
     
-    {/* LISTA DE GESTIÓN DE TAXIS */}
     <h4>Gestión de Flota ({taxis.length})</h4>
     <div style={{flex: 1, overflowY: 'auto', border: '1px solid #eee', background: 'white', padding: '5px', borderRadius: '5px'}}>
       {taxis.length === 0 ? <p style={{fontSize: 12, color: '#999', textAlign: 'center'}}>No hay taxis.</p> : (
@@ -49,17 +56,13 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
             <li key={t.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px', borderBottom: '1px solid #f0f0f0', fontSize: '13px'}}>
               <span>
                 <strong>#{t.id}</strong> {t.modelo} 
-                <span style={{fontSize: 10, marginLeft: 5, color: t.estado==='LIBRE'?'green':'red'}}>
-                  ({t.estado})
-                </span>
+                <span style={{fontSize: 10, marginLeft: 5, color: t.estado==='LIBRE'?'green':'red'}}>({t.estado})</span>
               </span>
               <button 
                 onClick={() => eliminarTaxi(t.id)}
-                disabled={t.estado === 'OCUPADO'} // Bloqueamos botón si está ocupado
+                disabled={t.estado === 'OCUPADO'}
                 style={{background: t.estado === 'OCUPADO' ? '#ccc' : '#dc3545', color: 'white', border: 'none', borderRadius: '3px', padding: '2px 8px', cursor: 'pointer'}}
-              >
-                🗑️
-              </button>
+              >🗑️</button>
             </li>
           ))}
         </ul>
@@ -71,7 +74,6 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
 const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje }) => (
   <div style={panelStyle}>
     <h3>🙋‍♂️ App de Cliente</h3>
-    <p>¿A dónde vamos?</p>
     <div style={{marginBottom: 20}}>
       <label>Tu ID:</label>
       <input type="number" min="1" value={miIdCliente} onChange={(e) => setMiIdCliente(e.target.value)} style={{width: '50px', marginLeft: 10}}/>
@@ -108,11 +110,12 @@ const VistaTaxista = ({ taxis, miIdTaxi, setMiIdTaxi }) => {
   )
 }
 
-// --- APP PRINCIPAL ---
 export default function App() {
   const [taxis, setTaxis] = useState([])
   const [infoEmpresa, setInfoEmpresa] = useState({ ganancia: 0, viajes: 0 })
-  const [mejorTaxi, setMejorTaxi] = useState(null) // Nuevo estado
+  const [mejorTaxi, setMejorTaxi] = useState(null)
+  const [simulacionActiva, setSimulacionActiva] = useState(false) // Estado simulación
+  
   const [rolActual, setRolActual] = useState('ADMIN') 
   const [mensaje, setMensaje] = useState("Sistema iniciado.")
   const [miIdTaxi, setMiIdTaxi] = useState(null)
@@ -124,7 +127,8 @@ export default function App() {
         const res = await axios.get(`${API_URL}/estado`)
         setTaxis(res.data.taxis)
         setInfoEmpresa({ ganancia: res.data.empresa_ganancia, viajes: res.data.viajes })
-        setMejorTaxi(res.data.mejor_taxi) // Guardamos el mejor taxi
+        setMejorTaxi(res.data.mejor_taxi)
+        setSimulacionActiva(res.data.simulacion_activa)
       } catch (e) { console.error("Conectando...") }
     }, 500)
     return () => clearInterval(intervalo)
@@ -137,14 +141,19 @@ export default function App() {
     } catch (e) { setMensaje("Error al crear taxi.") }
   }
 
-  // NUEVA FUNCIÓN PARA ELIMINAR
   const eliminarTaxi = async (id) => {
     try {
       await axios.delete(`${API_URL}/taxis/${id}`)
       setMensaje(`Admin: Taxi ${id} eliminado.`)
-    } catch (error) {
-      alert("No se pudo eliminar: " + error.response.data.detail)
-    }
+    } catch (error) { alert("No se pudo eliminar: " + error.response.data.detail) }
+  }
+
+  // --- NUEVA FUNCIÓN PARA ACTIVAR SIMULACIÓN ---
+  const toggleSimulacion = async (activar) => {
+    try {
+      await axios.post(`${API_URL}/simulacion/toggle`, { activa: activar })
+      setMensaje(activar ? "Simulación INICIADA" : "Simulación DETENIDA")
+    } catch (e) { console.error(e) }
   }
 
   const solicitarViaje = async () => {
@@ -166,15 +175,13 @@ export default function App() {
         <button onClick={() => setRolActual('TAXI')} style={rolActual === 'TAXI' ? tabActive : tabInactive}>🚖 TAXISTA</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', height: '550px' }}> {/* Altura fija para layout */}
+      <div style={{ display: 'flex', gap: '20px', height: '600px' }}>
         <div style={{ width: '350px', height: '100%' }}>
           {rolActual === 'ADMIN' && 
             <VistaAdmin 
-              infoEmpresa={infoEmpresa} 
-              taxis={taxis} 
-              mejorTaxi={mejorTaxi} 
-              registrarTaxi={registrarTaxi} 
-              eliminarTaxi={eliminarTaxi} // Pasamos la función
+              infoEmpresa={infoEmpresa} taxis={taxis} mejorTaxi={mejorTaxi} 
+              registrarTaxi={registrarTaxi} eliminarTaxi={eliminarTaxi}
+              simulacionActiva={simulacionActiva} toggleSimulacion={toggleSimulacion}
             />
           }
           {rolActual === 'CLIENTE' && <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} />}
@@ -183,7 +190,7 @@ export default function App() {
         </div>
 
         <div style={{ position: 'relative', width: mapSize, height: mapSize, background: '#eee', border: '3px solid #333' }}>
-          <span style={{position:'absolute', top: 5, left: 5, color: '#888', fontWeight: 'bold'}}>MAPA CIUDAD</span>
+          <span style={{position:'absolute', top: 5, left: 5, color: '#888', fontWeight: 'bold'}}>MAPA CIUDAD (Simulación)</span>
           {taxis.map(taxi => (
             <div key={taxi.id} style={{
                 position: 'absolute', left: taxi.x * scale, top: taxi.y * scale, width: '18px', height: '18px',

@@ -11,40 +11,26 @@ class SistemaUnieTaxi:
         self.ganancia_empresa = 0.0
         self.viajes_totales = 0
         
-        # --- NUEVO: Contador Persistente (Como un AUTO_INCREMENT de SQL) ---
+        # CONTADORES PERSISTENTES (IDs únicos)
         self.contador_id_taxi = 0 
+        self.contador_id_cliente = 0 # <--- NUEVO
         
-        # Control de Estado
         self.clientes_viajando = set() 
-
-        # Semáforos
         self.mutex_taxis = threading.Lock()
         self.mutex_contabilidad = threading.Lock()
 
     def registrar_taxi(self, modelo, placa):
         if random.random() < 0.1: return None
-        
-        # --- LÓGICA CORREGIDA ---
-        # Incrementamos el contador global antes de asignar.
-        # Aunque borremos taxis, este número nunca baja.
         self.contador_id_taxi += 1
-        nuevo_id = self.contador_id_taxi
-        
-        nuevo_taxi = Taxi(
-            id=nuevo_id,  # <--- Usamos el contador, NO len(self.taxis)
-            modelo=modelo,
-            placa=placa,
-            x=random.uniform(0, 100),
-            y=random.uniform(0, 100)
-        )
+        nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, random.uniform(0, 100), random.uniform(0, 100))
         with self.mutex_taxis:
             self.taxis.append(nuevo_taxi)
         return nuevo_taxi
 
-    # ... MANTÉN EL RESTO DE MÉTODOS IGUAL (registrar_cliente, procesar_solicitud, etc) ...
-    
     def registrar_cliente(self, nombre, tarjeta):
-        nuevo_cliente = Cliente(len(self.clientes)+1, nombre, tarjeta)
+        # Generamos ID único para clientes también
+        self.contador_id_cliente += 1
+        nuevo_cliente = Cliente(self.contador_id_cliente, nombre, tarjeta)
         self.clientes.append(nuevo_cliente)
         return nuevo_cliente
 
@@ -59,13 +45,17 @@ class SistemaUnieTaxi:
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
                     dist = math.sqrt((taxi.x - ox)**2 + (taxi.y - oy)**2)
-                    if dist <= 20: 
-                        if dist < distancia_minima:
-                            distancia_minima = dist
+                    
+                    # --- CAMBIO AQUÍ: YA NO HAY LÍMITE DE DISTANCIA ---
+                    # Antes: if dist <= 20: ...
+                    # Ahora: Siempre buscamos el menor, esté donde esté.
+                    
+                    if dist < distancia_minima:
+                        distancia_minima = dist
+                        mejor_taxi = taxi
+                    elif dist == distancia_minima:
+                        if taxi.calificacion > mejor_taxi.calificacion:
                             mejor_taxi = taxi
-                        elif dist == distancia_minima:
-                            if taxi.calificacion > mejor_taxi.calificacion:
-                                mejor_taxi = taxi
             
             if mejor_taxi:
                 mejor_taxi.estado = "OCUPADO"
@@ -90,14 +80,11 @@ class SistemaUnieTaxi:
             taxi.ganancias += pago_taxi
             self.ganancia_empresa += comision
             self.viajes_totales += 1
-            if self.viajes_totales % 5 == 0:
-                print(f"[AUDITORÍA] Taxi {taxi.placa}...")
 
     def eliminar_taxi(self, taxi_id):
         with self.mutex_taxis:
             taxi_a_borrar = next((t for t in self.taxis if t.id == taxi_id), None)
             if not taxi_a_borrar: return False, "Taxi no encontrado"
             if taxi_a_borrar.estado == "OCUPADO": return False, "No se puede eliminar: Ocupado."
-            
             self.taxis.remove(taxi_a_borrar)
             return True, "Taxi eliminado."
