@@ -20,6 +20,21 @@ class SistemaUnieTaxi:
         self.mutex_taxis = threading.Lock()
         self.mutex_contabilidad = threading.Lock()
 
+    # --- AÑADIR ESTO DENTRO DE LA CLASE SistemaUnieTaxi ---
+    def eliminar_taxi(self, taxi_id):
+        with self.mutex_taxis:
+            # Buscamos el taxi por ID
+            taxi_a_borrar = next((t for t in self.taxis if t.id == taxi_id), None)
+            
+            if not taxi_a_borrar:
+                return False, "Taxi no encontrado"
+            
+            if taxi_a_borrar.estado == "OCUPADO":
+                return False, "No se puede eliminar: El taxi está llevando un pasajero."
+            
+            self.taxis.remove(taxi_a_borrar)
+            return True, "Taxi eliminado del sistema."
+        
     def registrar_taxi(self, modelo, placa):
         # Simulamos verificación de antecedentes (10% fallo)
         if random.random() < 0.1: return None

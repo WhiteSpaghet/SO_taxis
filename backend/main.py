@@ -61,11 +61,31 @@ class SolicitudViaje(BaseModel):
 
 @app.get("/estado")
 def ver_estado():
+    # Calculamos el taxi con más ganancias al vuelo
+    mejor_taxi = None
+    if sistema.taxis:
+        # Buscamos el objeto taxi con el atributo 'ganancias' más alto
+        mejor_taxi_obj = max(sistema.taxis, key=lambda t: t.ganancias)
+        if mejor_taxi_obj.ganancias > 0:
+            mejor_taxi = {
+                "id": mejor_taxi_obj.id, 
+                "modelo": mejor_taxi_obj.modelo, 
+                "ganancias": round(mejor_taxi_obj.ganancias, 2)
+            }
+
     return {
         "taxis": sistema.taxis,
         "empresa_ganancia": round(sistema.ganancia_empresa, 2),
-        "viajes": sistema.viajes_totales
+        "viajes": sistema.viajes_totales,
+        "mejor_taxi": mejor_taxi  # <--- NUEVO CAMPO
     }
+
+@app.delete("/taxis/{taxi_id}")
+def borrar_taxi(taxi_id: int):
+    exito, mensaje = sistema.eliminar_taxi(taxi_id)
+    if not exito:
+        raise HTTPException(status_code=400, detail=mensaje)
+    return {"mensaje": mensaje}
 
 @app.post("/taxis")
 def crear_taxi(datos: TaxiRegistro):
