@@ -1,7 +1,7 @@
 import threading
 import math
 import random
-from datetime import datetime, timedelta # <--- IMPORTAR ESTO
+from datetime import datetime, timedelta
 from .taxi import Taxi
 from .cliente import Cliente
 
@@ -15,16 +15,13 @@ class SistemaUnieTaxi:
         self.contador_id_cliente = 0
         self.clientes_viajando = set() 
 
-        # --- RELOJ SIMULADO ---
         # Iniciamos el 12 de Diciembre a las 6:00 AM
         self.tiempo_actual = datetime(2025, 12, 12, 6, 0, 0) 
 
         self.mutex_taxis = threading.RLock()
         self.mutex_contabilidad = threading.RLock()
 
-    # --- NUEVA FUNCIÓN PARA AVANZAR RELOJ ---
     def tick_tiempo(self):
-        # Cada vez que llamamos a esto, pasan 2 minutos en la simulación
         self.tiempo_actual += timedelta(minutes=2)
 
     def registrar_taxi(self, modelo, placa):
@@ -69,14 +66,26 @@ class SistemaUnieTaxi:
         return mejor_taxi
 
     def finalizar_viaje(self, taxi, costo):
-        if taxi.cliente_actual in self.clientes_viajando:
-            self.clientes_viajando.remove(taxi.cliente_actual)
+        # 1. ACTUALIZAR CONTADOR DEL CLIENTE
+        if taxi.cliente_actual:
+            # Buscamos el objeto cliente por su ID
+            cliente_obj = next((c for c in self.clientes if c.id == taxi.cliente_actual), None)
+            if cliente_obj:
+                cliente_obj.viajes += 1 # <--- SUMAMOS VIAJE AL CLIENTE
+
+            if taxi.cliente_actual in self.clientes_viajando:
+                self.clientes_viajando.remove(taxi.cliente_actual)
+            
             taxi.cliente_actual = None
 
+        # 2. ACTUALIZAR CONTADOR DEL TAXI Y EMPRESA
         with self.mutex_contabilidad:
             comision = costo * 0.20
             pago_taxi = costo - comision
+            
             taxi.ganancias += pago_taxi
+            taxi.viajes += 1 # <--- SUMAMOS VIAJE AL TAXISTA
+            
             self.ganancia_empresa += comision
             self.viajes_totales += 1
 

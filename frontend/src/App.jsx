@@ -12,30 +12,11 @@ const btnStyle = { width: '100%', padding: '10px', color: 'white', border: 'none
 const tabActive = { padding: '10px 20px', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '5px 5px 0 0', fontWeight: 'bold' }
 const tabInactive = { padding: '10px 20px', cursor: 'pointer', background: '#eee', color: '#666', border: 'none', borderRadius: '5px 5px 0 0' }
 
-// ESTILO NUEVO PARA EL RELOJ (Barra superior)
-const clockContainerStyle = {
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'center', 
-  marginBottom: '10px',
-  background: '#333', 
-  color: 'white', 
-  padding: '10px', 
-  borderRadius: '5px'
-}
+const clockContainerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', background: '#333', color: 'white', padding: '10px', borderRadius: '5px' }
+const digitalClockStyle = { fontFamily: 'monospace', fontSize: '20px', color: '#0f0', fontWeight: 'bold', background: '#000', padding: '2px 10px', borderRadius: '3px', border: '1px solid #555' }
 
-const digitalClockStyle = {
-  fontFamily: 'monospace', 
-  fontSize: '20px', 
-  color: '#0f0', 
-  fontWeight: 'bold',
-  background: '#000',
-  padding: '2px 10px',
-  borderRadius: '3px',
-  border: '1px solid #555'
-}
+// --- COMPONENTES ---
 
-// COMPONENTES DE VISTA
 const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi, simulacionActiva, intervalo, actualizarSimulacion }) => (
   <div style={panelStyle}>
     <h3>👮‍♂️ Panel de Administración</h3>
@@ -80,17 +61,33 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
   </div>
 )
 
-const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje }) => (
-  <div style={panelStyle}>
-    <h3>🙋‍♂️ App de Cliente</h3>
-    <div style={{marginBottom: 20}}>
-      <label>Tu ID:</label>
-      <input type="number" min="1" value={miIdCliente} onChange={(e) => setMiIdCliente(e.target.value)} style={{width: '50px', marginLeft: 10}}/>
+const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje, clientes }) => {
+  // Buscamos los datos de MI cliente en la lista
+  const miClienteDatos = clientes.find(c => c.id === parseInt(miIdCliente))
+
+  return (
+    <div style={panelStyle}>
+      <h3>🙋‍♂️ App de Cliente</h3>
+      <div style={{marginBottom: 20}}>
+        <label>Tu ID:</label>
+        <input type="number" min="1" value={miIdCliente} onChange={(e) => setMiIdCliente(e.target.value)} style={{width: '50px', marginLeft: 10}}/>
+      </div>
+      
+      {/* --- MOSTRAR ESTADÍSTICAS DEL CLIENTE --- */}
+      {miClienteDatos && (
+        <div style={{background: '#e3f2fd', padding: '10px', borderRadius: '5px', marginBottom: '15px', border: '1px solid #90caf9'}}>
+          <p style={{margin: 0, fontSize: '14px', color: '#1565c0'}}>
+            👤 <strong>{miClienteDatos.nombre}</strong><br/>
+            Has realizado: <strong>{miClienteDatos.viajes} viajes</strong>
+          </p>
+        </div>
+      )}
+
+      <button onClick={solicitarViaje} style={{...btnStyle, background: '#28a745'}}>🚕 Solicitar Viaje</button>
+      <div style={{marginTop: 10, padding: 10, background: '#e9ffe9', border: '1px solid #b2d8b2', borderRadius: '5px', fontSize: '13px'}}><strong>Estado:</strong> {mensaje}</div>
     </div>
-    <button onClick={solicitarViaje} style={{...btnStyle, background: '#28a745'}}>🚕 Solicitar Viaje</button>
-    <div style={{marginTop: 10, padding: 10, background: '#e9ffe9', border: '1px solid #b2d8b2', borderRadius: '5px', fontSize: '13px'}}><strong>Estado:</strong> {mensaje}</div>
-  </div>
-)
+  )
+}
 
 const VistaTaxista = ({ taxis, miIdTaxi, setMiIdTaxi }) => {
   const miTaxiDatos = taxis.find(t => t.id === parseInt(miIdTaxi))
@@ -105,6 +102,8 @@ const VistaTaxista = ({ taxis, miIdTaxi, setMiIdTaxi }) => {
         <div style={statBox}>
           <p>Estado: <strong style={{color: miTaxiDatos.estado === 'LIBRE' ? 'green' : 'red'}}>{miTaxiDatos.estado}</strong></p>
           <p>Mis Ganancias: <strong>${miTaxiDatos.ganancias.toFixed(2)}</strong></p>
+          {/* --- AÑADIDO CONTADOR --- */}
+          <p>Viajes Realizados: <strong>{miTaxiDatos.viajes}</strong></p> 
           <p>Placa: <strong>{miTaxiDatos.placa}</strong></p>
           <p>Calif: <strong>⭐ {miTaxiDatos.calificacion}</strong></p>
           {miTaxiDatos.estado === 'OCUPADO' && <div style={{marginTop: 10, padding: 5, background: '#fff3cd', fontSize: 12}}>⚠️ PASAJERO A BORDO</div>}
@@ -116,6 +115,7 @@ const VistaTaxista = ({ taxis, miIdTaxi, setMiIdTaxi }) => {
 
 export default function App() {
   const [taxis, setTaxis] = useState([])
+  const [clientes, setClientes] = useState([]) // NUEVO ESTADO PARA CLIENTES
   const [infoEmpresa, setInfoEmpresa] = useState({ ganancia: 0, viajes: 0 })
   const [mejorTaxi, setMejorTaxi] = useState(null)
   const [simulacionActiva, setSimulacionActiva] = useState(false)
@@ -131,6 +131,7 @@ export default function App() {
       try {
         const res = await axios.get(`${API_URL}/estado`)
         setTaxis(res.data.taxis)
+        setClientes(res.data.clientes || []) // Guardamos clientes (con manejo de error si viene null)
         setInfoEmpresa({ ganancia: res.data.empresa_ganancia, viajes: res.data.viajes })
         setMejorTaxi(res.data.mejor_taxi)
         setSimulacionActiva(res.data.simulacion_activa)
@@ -170,18 +171,17 @@ export default function App() {
       </div>
 
       <div style={{ display: 'flex', gap: '20px' }}>
-        {/* COLUMNA IZQUIERDA (CONTROLES) */}
         <div style={{ width: '350px', height: '600px' }}>
           {rolActual === 'ADMIN' && <VistaAdmin infoEmpresa={infoEmpresa} taxis={taxis} mejorTaxi={mejorTaxi} registrarTaxi={registrarTaxi} eliminarTaxi={eliminarTaxi} simulacionActiva={simulacionActiva} intervalo={intervalo} actualizarSimulacion={actualizarSimulacion} />}
-          {rolActual === 'CLIENTE' && <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} />}
+          
+          {/* PASAMOS LA LISTA DE CLIENTES A LA VISTA CLIENTE */}
+          {rolActual === 'CLIENTE' && <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} clientes={clientes} />}
+          
           {rolActual === 'TAXI' && <VistaTaxista taxis={taxis} miIdTaxi={miIdTaxi} setMiIdTaxi={setMiIdTaxi} />}
           <div style={{marginTop: 10, fontSize: 12, color: '#999'}}>Log: {mensaje}</div>
         </div>
 
-        {/* COLUMNA DERECHA (MAPA + RELOJ) */}
         <div style={{ width: mapSize }}>
-          
-          {/* BARRA SUPERIOR CON RELOJ */}
           <div style={clockContainerStyle}>
              <span>MAPA DE LA CIUDAD</span>
              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
@@ -203,7 +203,6 @@ export default function App() {
             ))}
           </div>
         </div>
-
       </div>
     </div>
   )

@@ -11,6 +11,7 @@ class Taxi:
         self.estado = "LIBRE"
         self.calificacion = round(random.uniform(3.5, 5.0), 2)
         self.ganancias = 0.0
+        self.viajes = 0  # <--- NUEVO CONTADOR
         self.destino_actual = None
         self.cliente_actual = None
 
@@ -26,7 +27,6 @@ class Taxi:
             self.y = destino_y
             return True
 
-        # --- TU SOLUCIÓN AQUÍ ---
         # "Si la velocidad es mayor a la distancia, 
         # cambiamos la velocidad a la necesaria para recorrer esa distancia"
         velocidad_turno = velocidad
@@ -35,15 +35,12 @@ class Taxi:
             velocidad_turno = distancia # Frenado exacto
 
         # 3. Aplicamos el movimiento con la nueva velocidad ajustada
-        # Matemáticamente: (velocidad_turno / distancia) será 1.0 si estamos cerca,
-        # lo que significa que nos movemos el 100% del trayecto restante.
         if distancia > 0:
             ratio = velocidad_turno / distancia
             self.x += dx * ratio
             self.y += dy * ratio
 
         # 4. Comprobamos si hemos terminado
-        # Si nuestra velocidad ajustada fue igual a la distancia, hemos llegado.
         if distancia <= velocidad:
             return True
             

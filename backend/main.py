@@ -100,12 +100,13 @@ def ver_estado():
     
     return {
         "taxis": sistema.taxis,
+        # AHORA ENVIAMOS LOS CLIENTES TAMBIÉN
+        "clientes": sistema.clientes, 
         "empresa_ganancia": round(sistema.ganancia_empresa, 2),
         "viajes": sistema.viajes_totales,
         "mejor_taxi": mejor_taxi,
         "simulacion_activa": SIMULACION_ACTIVA,
         "intervalo_generacion": INTERVALO_GENERACION,
-        # ENVIAMOS LA HORA FORMATEADA (Ej: "12/12/2025 08:30")
         "tiempo_simulado": sistema.tiempo_actual.strftime("%d/%m/%Y %H:%M")
     }
 

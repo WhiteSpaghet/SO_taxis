@@ -3,9 +3,11 @@ class Cliente:
         self.id = id
         self.nombre = nombre
         self.tarjeta_credito = tarjeta_credito
+        self.viajes = 0 # <--- NUEVO CONTADOR
         self.posicion_x = 0.0
         self.posicion_y = 0.0
-        self.en_viaje = False
+        
+    # Nota: No necesitamos mucha lógica aquí, el sistema lo gestiona todo.
 
     def solicitar_viaje(self, origen_x, origen_y, destino_x, destino_y):
         """Registra la intención de viaje del cliente."""
