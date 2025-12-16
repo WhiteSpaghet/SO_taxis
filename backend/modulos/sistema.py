@@ -1,6 +1,7 @@
 import threading
 import math
 import random
+from datetime import datetime, timedelta # <--- IMPORTAR ESTO
 from .taxi import Taxi
 from .cliente import Cliente
 
@@ -14,16 +15,21 @@ class SistemaUnieTaxi:
         self.contador_id_cliente = 0
         self.clientes_viajando = set() 
 
-        # --- CAMBIO IMPORTANTE: USAMOS RLock (Reentrant Lock) ---
-        # Esto evita que el sistema se bloquee si un hilo intenta 
-        # entrar dos veces en la misma habitación.
+        # --- RELOJ SIMULADO ---
+        # Iniciamos el 12 de Diciembre a las 6:00 AM
+        self.tiempo_actual = datetime(2025, 12, 12, 6, 0, 0) 
+
         self.mutex_taxis = threading.RLock()
         self.mutex_contabilidad = threading.RLock()
+
+    # --- NUEVA FUNCIÓN PARA AVANZAR RELOJ ---
+    def tick_tiempo(self):
+        # Cada vez que llamamos a esto, pasan 2 minutos en la simulación
+        self.tiempo_actual += timedelta(minutes=2)
 
     def registrar_taxi(self, modelo, placa):
         if random.random() < 0.1: return None
         self.contador_id_taxi += 1
-        # Aseguramos coordenadas float desde el principio
         nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, float(random.uniform(0, 100)), float(random.uniform(0, 100)))
         with self.mutex_taxis:
             self.taxis.append(nuevo_taxi)
@@ -45,9 +51,7 @@ class SistemaUnieTaxi:
         with self.mutex_taxis:
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
-                    # Cálculo seguro
                     dist = math.sqrt((taxi.x - float(ox))**2 + (taxi.y - float(oy))**2)
-                    
                     if dist < distancia_minima:
                         distancia_minima = dist
                         mejor_taxi = taxi

@@ -4,7 +4,7 @@ import random
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional # <--- IMPORTANTE
+from typing import Optional
 from modulos.sistema import SistemaUnieTaxi
 
 app = FastAPI()
@@ -17,27 +17,27 @@ app.add_middleware(
 )
 
 sistema = SistemaUnieTaxi()
-
-# --- ESTADO DE LA SIMULACIÓN ---
 SIMULACION_ACTIVA = False
-INTERVALO_GENERACION = 3.0 # Segundos por defecto entre clientes
+INTERVALO_GENERACION = 3.0
 
-# --- HILO 1: MOTOR FÍSICO ---
+# --- HILO 1: MOTOR FÍSICO + RELOJ ---
 def motor_fisica():
     while True:
         try:
+            # 1. AVANZAMOS EL RELOJ DEL SISTEMA
+            # Solo avanza si la simulación está activa (opcional, o siempre)
+            # Vamos a hacer que avance siempre para que se vea vivo
+            sistema.tick_tiempo() 
+
             with sistema.mutex_taxis:
                 taxis_activos = [t for t in sistema.taxis if t.estado == "OCUPADO" and t.destino_actual]
             
-            # Velocidad alta si simulación activa
             velocidad = 8.0 if SIMULACION_ACTIVA else 2.0
 
             for taxi in taxis_activos:
                 dest_x, dest_y = taxi.destino_actual
                 try:
-                    # Usamos la lógica de frenado perfecto que ya tienes en taxi.py
                     llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
-                    
                     if llegado:
                         with sistema.mutex_taxis:
                             taxi.estado = "LIBRE"
@@ -49,12 +49,12 @@ def motor_fisica():
         except Exception as e:
             print(f"Error motor: {e}")
         
-        time.sleep(0.5)
+        time.sleep(0.5) # Cada 0.5 seg reales = 2 min simulados
 
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
 
-# --- HILO 2: SIMULADOR DE CLIENTES (ACTUALIZADO) ---
+# --- HILO 2: SIMULADOR ---
 def simulador_clientes():
     while True:
         if SIMULACION_ACTIVA:
@@ -65,8 +65,6 @@ def simulador_clientes():
                 random.uniform(0, 100), random.uniform(0, 100)
             )
             print(f"[AUTO] Cliente {nuevo_cliente.id} generado.")
-            
-            # --- AQUÍ USAMOS LA VELOCIDAD VARIABLE ---
             time.sleep(INTERVALO_GENERACION) 
         else:
             time.sleep(1)
@@ -74,7 +72,7 @@ def simulador_clientes():
 hilo_simulacion = threading.Thread(target=simulador_clientes, daemon=True)
 hilo_simulacion.start()
 
-# --- MODELOS DE DATOS ---
+# --- MODELOS ---
 class TaxiRegistro(BaseModel):
     modelo: str
     placa: str
@@ -86,7 +84,6 @@ class SolicitudViaje(BaseModel):
     destino_x: float
     destino_y: float
 
-# Modelo flexible para configuración
 class ConfigSimulacion(BaseModel):
     activa: Optional[bool] = None
     intervalo: Optional[float] = None
@@ -100,13 +97,16 @@ def ver_estado():
         mejor_taxi_obj = max(sistema.taxis, key=lambda t: t.ganancias)
         if mejor_taxi_obj.ganancias > 0:
             mejor_taxi = {"id": mejor_taxi_obj.id, "modelo": mejor_taxi_obj.modelo, "ganancias": round(mejor_taxi_obj.ganancias, 2)}
+    
     return {
         "taxis": sistema.taxis,
         "empresa_ganancia": round(sistema.ganancia_empresa, 2),
         "viajes": sistema.viajes_totales,
         "mejor_taxi": mejor_taxi,
         "simulacion_activa": SIMULACION_ACTIVA,
-        "intervalo_generacion": INTERVALO_GENERACION # Enviamos el dato al frontend
+        "intervalo_generacion": INTERVALO_GENERACION,
+        # ENVIAMOS LA HORA FORMATEADA (Ej: "12/12/2025 08:30")
+        "tiempo_simulado": sistema.tiempo_actual.strftime("%d/%m/%Y %H:%M")
     }
 
 @app.post("/taxis")
@@ -129,16 +129,9 @@ def solicitar(datos: SolicitudViaje):
     if res == "SIN_TAXIS": return {"resultado": "No hay taxis."}
     return {"resultado": "Asignado", "taxi_id": res.id}
 
-# --- NUEVO ENDPOINT DE CONFIGURACIÓN ---
 @app.post("/simulacion/config")
 def configurar_simulacion(config: ConfigSimulacion):
     global SIMULACION_ACTIVA, INTERVALO_GENERACION
-    
-    if config.activa is not None:
-        SIMULACION_ACTIVA = config.activa
-        
-    if config.intervalo is not None:
-        # Limitamos para que no sea 0 y cuelgue el PC
-        INTERVALO_GENERACION = max(0.1, config.intervalo)
-        
+    if config.activa is not None: SIMULACION_ACTIVA = config.activa
+    if config.intervalo is not None: INTERVALO_GENERACION = max(0.1, config.intervalo)
     return {"mensaje": "Configuración actualizada", "activa": SIMULACION_ACTIVA, "intervalo": INTERVALO_GENERACION}
