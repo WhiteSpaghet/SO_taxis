@@ -6,41 +6,32 @@ from .cliente import Cliente
 
 class SistemaUnieTaxi:
     def __init__(self):
-        self.taxis = []     # Lista de objetos Taxi
-        self.clientes = []  # Lista de objetos Cliente
+        self.taxis = []     
+        self.clientes = []  
         self.ganancia_empresa = 0.0
         self.viajes_totales = 0
         
-        # --- CONTROL DE ESTADO DE PROCESOS (NUEVO) ---
-        # Este conjunto (Set) almacena los IDs de los clientes que están ocupados.
-        # Funciona como un bloqueo lógico para el usuario.
+        # --- NUEVO: Contador Persistente (Como un AUTO_INCREMENT de SQL) ---
+        self.contador_id_taxi = 0 
+        
+        # Control de Estado
         self.clientes_viajando = set() 
 
-        # --- RECURSOS CRÍTICOS Y SINCRONIZACIÓN ---
+        # Semáforos
         self.mutex_taxis = threading.Lock()
         self.mutex_contabilidad = threading.Lock()
 
-    # --- AÑADIR ESTO DENTRO DE LA CLASE SistemaUnieTaxi ---
-    def eliminar_taxi(self, taxi_id):
-        with self.mutex_taxis:
-            # Buscamos el taxi por ID
-            taxi_a_borrar = next((t for t in self.taxis if t.id == taxi_id), None)
-            
-            if not taxi_a_borrar:
-                return False, "Taxi no encontrado"
-            
-            if taxi_a_borrar.estado == "OCUPADO":
-                return False, "No se puede eliminar: El taxi está llevando un pasajero."
-            
-            self.taxis.remove(taxi_a_borrar)
-            return True, "Taxi eliminado del sistema."
-        
     def registrar_taxi(self, modelo, placa):
-        # Simulamos verificación de antecedentes (10% fallo)
         if random.random() < 0.1: return None
         
+        # --- LÓGICA CORREGIDA ---
+        # Incrementamos el contador global antes de asignar.
+        # Aunque borremos taxis, este número nunca baja.
+        self.contador_id_taxi += 1
+        nuevo_id = self.contador_id_taxi
+        
         nuevo_taxi = Taxi(
-            id=len(self.taxis) + 1,
+            id=nuevo_id,  # <--- Usamos el contador, NO len(self.taxis)
             modelo=modelo,
             placa=placa,
             x=random.uniform(0, 100),
@@ -50,31 +41,24 @@ class SistemaUnieTaxi:
             self.taxis.append(nuevo_taxi)
         return nuevo_taxi
 
+    # ... MANTÉN EL RESTO DE MÉTODOS IGUAL (registrar_cliente, procesar_solicitud, etc) ...
+    
     def registrar_cliente(self, nombre, tarjeta):
         nuevo_cliente = Cliente(len(self.clientes)+1, nombre, tarjeta)
         self.clientes.append(nuevo_cliente)
         return nuevo_cliente
 
     def procesar_solicitud(self, cliente_id, ox, oy, dx, dy):
-        """Algoritmo de Match Cliente-Taxi con Validaciones"""
-        
-        # 1. VALIDACIÓN DE ID NEGATIVO
-        if cliente_id <= 0:
-            return "ID_INVALIDO"
-
-        # 2. VALIDACIÓN DE ESTADO (Usuario ya viaja)
-        if cliente_id in self.clientes_viajando:
-            return "CLIENTE_OCUPADO" 
+        if cliente_id <= 0: return "ID_INVALIDO"
+        if cliente_id in self.clientes_viajando: return "CLIENTE_OCUPADO" 
 
         mejor_taxi = None
         distancia_minima = float('inf')
 
-        # 3. SECCIÓN CRÍTICA (Buscar taxi)
         with self.mutex_taxis:
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
                     dist = math.sqrt((taxi.x - ox)**2 + (taxi.y - oy)**2)
-                    
                     if dist <= 20: 
                         if dist < distancia_minima:
                             distancia_minima = dist
@@ -83,39 +67,37 @@ class SistemaUnieTaxi:
                             if taxi.calificacion > mejor_taxi.calificacion:
                                 mejor_taxi = taxi
             
-            # 4. ASIGNACIÓN
             if mejor_taxi:
                 mejor_taxi.estado = "OCUPADO"
                 mejor_taxi.destino_actual = (dx, dy)
                 mejor_taxi.x = ox
                 mejor_taxi.y = oy
                 mejor_taxi.cliente_actual = cliente_id 
-                
-                # Bloqueamos al cliente
                 self.clientes_viajando.add(cliente_id)
             else:
-                return "SIN_TAXIS" # Devolvemos código específico si no hay coches
+                return "SIN_TAXIS"
         
         return mejor_taxi
 
     def finalizar_viaje(self, taxi, costo):
-        """Cierre contable y liberación de recursos"""
-        
-        # 1. LIBERACIÓN DEL PROCESO CLIENTE
-        # Si el taxi traía un cliente, lo desbloqueamos
         if taxi.cliente_actual in self.clientes_viajando:
             self.clientes_viajando.remove(taxi.cliente_actual)
-            taxi.cliente_actual = None # Limpiamos el taxi
+            taxi.cliente_actual = None
 
-        # 2. SECCIÓN CRÍTICA CONTABLE
         with self.mutex_contabilidad:
             comision = costo * 0.20
             pago_taxi = costo - comision
-            
             taxi.ganancias += pago_taxi
             self.ganancia_empresa += comision
             self.viajes_totales += 1
-            
-            # Auditoría aleatoria (1 de cada 5 viajes)
             if self.viajes_totales % 5 == 0:
-                print(f"[AUDITORÍA CALIDAD] Revisando viaje del Taxi {taxi.placa}...")
+                print(f"[AUDITORÍA] Taxi {taxi.placa}...")
+
+    def eliminar_taxi(self, taxi_id):
+        with self.mutex_taxis:
+            taxi_a_borrar = next((t for t in self.taxis if t.id == taxi_id), None)
+            if not taxi_a_borrar: return False, "Taxi no encontrado"
+            if taxi_a_borrar.estado == "OCUPADO": return False, "No se puede eliminar: Ocupado."
+            
+            self.taxis.remove(taxi_a_borrar)
+            return True, "Taxi eliminado."
