@@ -18,10 +18,9 @@ app.add_middleware(
 
 sistema = SistemaUnieTaxi()
 SIMULACION_ACTIVA = False
-# AJUSTADO: 0.3s por defecto (x10 más rápido)
-INTERVALO_GENERACION = 0.3 
+INTERVALO_GENERACION = 3.0
 
-# --- HILO 1: MOTOR FÍSICO (x10 VELOCIDAD) ---
+# --- HILO 1: MOTOR FÍSICO ---
 def motor_fisica():
     while True:
         try:
@@ -47,34 +46,50 @@ def motor_fisica():
         except Exception as e:
             print(f"Error motor: {e}")
         
-        # CAMBIO CLAVE: 0.05s en lugar de 0.5s
-        time.sleep(0.05) 
+        time.sleep(0.5)
 
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
 
-# --- HILO 2: SIMULADOR DE CLIENTES ---
+# --- HILO 2: SIMULADOR INTELIGENTE (AUTO-ESCALADO) ---
 def simulador_clientes():
     while True:
         if SIMULACION_ACTIVA:
             cliente_id_seleccionado = None
+            
+            # 1. FILTRAR: ¿Quién está libre ahora mismo?
             clientes_libres = [c for c in sistema.clientes if c.id not in sistema.clientes_viajando]
+            
             usar_existente = False
             
+            # 2. TOMA DE DECISIÓN
             if len(clientes_libres) == 0:
+                # CASO A: ¡Saturación! Todos están viajando.
+                # Generamos cliente nuevo OBLIGATORIAMENTE para no detener el ritmo.
                 usar_existente = False
+                print("[AUTO] ⚠️ Todos los clientes están ocupados. Generando cliente de refuerzo...")
+            
             elif random.random() < 0.7:
+                # CASO B: Hay gente libre y el azar (70%) dice que reutilicemos.
                 usar_existente = True
+            
             else:
+                # CASO C: Hay gente libre, pero el azar (30%) dice que entre gente nueva.
                 usar_existente = False
 
+            # 3. EJECUCIÓN
             if usar_existente:
+                # Elegimos uno al azar de los libres
                 cliente = random.choice(clientes_libres)
                 cliente_id_seleccionado = cliente.id
+                print(f"[AUTO] 🔄 Cliente recurrente {cliente.nombre} (ID {cliente.id}) pide viaje.")
             else:
+                # Creamos uno nuevo
                 nuevo = sistema.registrar_cliente(f"Bot_{random.randint(1000,9999)}", "VISA")
                 cliente_id_seleccionado = nuevo.id
+                print(f"[AUTO] ✨ Cliente NUEVO registrado: {nuevo.nombre} (ID {nuevo.id}).")
 
+            # 4. LANZAR SOLICITUD AL SISTEMA
             sistema.procesar_solicitud(
                 cliente_id_seleccionado,
                 random.uniform(0, 100), random.uniform(0, 100),
@@ -83,7 +98,7 @@ def simulador_clientes():
             
             time.sleep(INTERVALO_GENERACION) 
         else:
-            time.sleep(0.1) # Idle check más rápido también
+            time.sleep(1)
 
 hilo_simulacion = threading.Thread(target=simulador_clientes, daemon=True)
 hilo_simulacion.start()
@@ -147,5 +162,5 @@ def solicitar(datos: SolicitudViaje):
 def configurar_simulacion(config: ConfigSimulacion):
     global SIMULACION_ACTIVA, INTERVALO_GENERACION
     if config.activa is not None: SIMULACION_ACTIVA = config.activa
-    if config.intervalo is not None: INTERVALO_GENERACION = max(0.05, config.intervalo) # Permitimos valores bajos
+    if config.intervalo is not None: INTERVALO_GENERACION = max(0.1, config.intervalo)
     return {"mensaje": "Configuración actualizada", "activa": SIMULACION_ACTIVA, "intervalo": INTERVALO_GENERACION}

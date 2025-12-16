@@ -21,8 +21,13 @@ class SistemaUnieTaxi:
         self.mutex_taxis = threading.RLock()
         self.mutex_contabilidad = threading.RLock()
 
+    # --- AQUÍ ESTÁ EL CAMBIO ---
     def tick_tiempo(self):
-        self.tiempo_actual += timedelta(minutes=2)
+        # ANTES: self.tiempo_actual += timedelta(minutes=2)
+        # AHORA: Sumamos 20 minutos por cada ciclo de cálculo.
+        # Con el ciclo actual de 0.05s, esto significa que:
+        # 1 segundo real = 400 minutos simulados (aprox 6 horas simuladas por segundo).
+        self.tiempo_actual += timedelta(minutes=20)
 
     def registrar_taxi(self, modelo, placa):
         if random.random() < 0.1: return None
@@ -66,25 +71,22 @@ class SistemaUnieTaxi:
         return mejor_taxi
 
     def finalizar_viaje(self, taxi, costo):
-        # 1. ACTUALIZAR CONTADOR DEL CLIENTE
         if taxi.cliente_actual:
-            # Buscamos el objeto cliente por su ID
             cliente_obj = next((c for c in self.clientes if c.id == taxi.cliente_actual), None)
             if cliente_obj:
-                cliente_obj.viajes += 1 # <--- SUMAMOS VIAJE AL CLIENTE
+                cliente_obj.viajes += 1 
 
             if taxi.cliente_actual in self.clientes_viajando:
                 self.clientes_viajando.remove(taxi.cliente_actual)
             
             taxi.cliente_actual = None
 
-        # 2. ACTUALIZAR CONTADOR DEL TAXI Y EMPRESA
         with self.mutex_contabilidad:
             comision = costo * 0.20
             pago_taxi = costo - comision
             
             taxi.ganancias += pago_taxi
-            taxi.viajes += 1 # <--- SUMAMOS VIAJE AL TAXISTA
+            taxi.viajes += 1 
             
             self.ganancia_empresa += comision
             self.viajes_totales += 1

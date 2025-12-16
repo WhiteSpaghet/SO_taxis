@@ -28,14 +28,13 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
           {simulacionActiva ? '🛑 DETENER SIMULACIÓN' : '🤖 INICIAR SIMULACIÓN AUTO'}
         </button>
         <div style={{marginTop: 10}}>
-          <label style={{fontSize: 12, fontWeight: 'bold', color: '#555'}}>Velocidad Generación (segundos):</label>
+          <label style={{fontSize: 12, fontWeight: 'bold', color: '#555'}}>Velocidad:</label>
           <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-            <span style={{fontSize: 12}}>🚀 0.1s</span>
-            {/* RANGO ACTUALIZADO PARA PERMITIR CAOS */}
-            <input type="range" min="0.1" max="2.0" step="0.1" value={intervalo} onChange={(e) => actualizarSimulacion({ intervalo: parseFloat(e.target.value) })} style={{flex: 1}}/>
-            <span style={{fontSize: 12}}>🐢 2s</span>
+            <span style={{fontSize: 12}}>🚀</span>
+            <input type="range" min="0.5" max="5.0" step="0.5" value={intervalo} onChange={(e) => actualizarSimulacion({ intervalo: parseFloat(e.target.value) })} style={{flex: 1}}/>
+            <span style={{fontSize: 12}}>🐢</span>
           </div>
-          <p style={{textAlign: 'center', fontSize: 11, color: '#666', margin: 0}}>(Valor actual: {intervalo}s)</p>
+          <p style={{textAlign: 'center', fontSize: 11, color: '#666', margin: 0}}>(1 cliente / {intervalo}s)</p>
         </div>
       </div>
       <hr style={{margin: '10px 0', border: '0', borderTop: '1px solid #eee'}}/>
@@ -63,7 +62,9 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
 )
 
 const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje, clientes }) => {
+  // Buscamos los datos de MI cliente en la lista
   const miClienteDatos = clientes.find(c => c.id === parseInt(miIdCliente))
+
   return (
     <div style={panelStyle}>
       <h3>🙋‍♂️ App de Cliente</h3>
@@ -71,6 +72,8 @@ const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje, cl
         <label>Tu ID:</label>
         <input type="number" min="1" value={miIdCliente} onChange={(e) => setMiIdCliente(e.target.value)} style={{width: '50px', marginLeft: 10}}/>
       </div>
+      
+      {/* --- MOSTRAR ESTADÍSTICAS DEL CLIENTE --- */}
       {miClienteDatos && (
         <div style={{background: '#e3f2fd', padding: '10px', borderRadius: '5px', marginBottom: '15px', border: '1px solid #90caf9'}}>
           <p style={{margin: 0, fontSize: '14px', color: '#1565c0'}}>
@@ -79,6 +82,7 @@ const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje, cl
           </p>
         </div>
       )}
+
       <button onClick={solicitarViaje} style={{...btnStyle, background: '#28a745'}}>🚕 Solicitar Viaje</button>
       <div style={{marginTop: 10, padding: 10, background: '#e9ffe9', border: '1px solid #b2d8b2', borderRadius: '5px', fontSize: '13px'}}><strong>Estado:</strong> {mensaje}</div>
     </div>
@@ -98,6 +102,7 @@ const VistaTaxista = ({ taxis, miIdTaxi, setMiIdTaxi }) => {
         <div style={statBox}>
           <p>Estado: <strong style={{color: miTaxiDatos.estado === 'LIBRE' ? 'green' : 'red'}}>{miTaxiDatos.estado}</strong></p>
           <p>Mis Ganancias: <strong>${miTaxiDatos.ganancias.toFixed(2)}</strong></p>
+          {/* --- AÑADIDO CONTADOR --- */}
           <p>Viajes Realizados: <strong>{miTaxiDatos.viajes}</strong></p> 
           <p>Placa: <strong>{miTaxiDatos.placa}</strong></p>
           <p>Calif: <strong>⭐ {miTaxiDatos.calificacion}</strong></p>
@@ -110,11 +115,11 @@ const VistaTaxista = ({ taxis, miIdTaxi, setMiIdTaxi }) => {
 
 export default function App() {
   const [taxis, setTaxis] = useState([])
-  const [clientes, setClientes] = useState([]) 
+  const [clientes, setClientes] = useState([]) // NUEVO ESTADO PARA CLIENTES
   const [infoEmpresa, setInfoEmpresa] = useState({ ganancia: 0, viajes: 0 })
   const [mejorTaxi, setMejorTaxi] = useState(null)
   const [simulacionActiva, setSimulacionActiva] = useState(false)
-  const [intervalo, setIntervalo] = useState(0.3) 
+  const [intervalo, setIntervalo] = useState(3.0) 
   const [rolActual, setRolActual] = useState('ADMIN') 
   const [mensaje, setMensaje] = useState("Sistema iniciado.")
   const [miIdTaxi, setMiIdTaxi] = useState(null)
@@ -122,19 +127,17 @@ export default function App() {
   const [tiempoSimulado, setTiempoSimulado] = useState("00:00")
 
   useEffect(() => {
-    // ACTUALIZACIÓN X10 MÁS RÁPIDA (50ms en vez de 500ms)
     const intervaloId = setInterval(async () => {
       try {
         const res = await axios.get(`${API_URL}/estado`)
         setTaxis(res.data.taxis)
-        setClientes(res.data.clientes || []) 
+        setClientes(res.data.clientes || []) // Guardamos clientes (con manejo de error si viene null)
         setInfoEmpresa({ ganancia: res.data.empresa_ganancia, viajes: res.data.viajes })
         setMejorTaxi(res.data.mejor_taxi)
         setSimulacionActiva(res.data.simulacion_activa)
         setTiempoSimulado(res.data.tiempo_simulado)
-        // No sobrescribimos el intervalo local con el del servidor para evitar saltos en el slider UI
       } catch (e) { console.error("Conectando...") }
-    }, 50) // <--- ESTO ES LA CLAVE PARA VERLO FLUIDO
+    }, 500)
     return () => clearInterval(intervaloId)
   }, [])
 
@@ -156,6 +159,8 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: 'Arial', padding: '20px', maxWidth: '950px', margin: '0 auto' }}>
+      
+      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #ccc', paddingBottom: '10px' }}>
         <h2 style={{margin:0, color: '#d4af37'}}>UNIE TAXI</h2>
         <div style={{display:'flex', gap:'10px'}}>
@@ -164,13 +169,18 @@ export default function App() {
           <button onClick={() => setRolActual('TAXI')} style={rolActual === 'TAXI' ? tabActive : tabInactive}>🚖 TAXISTA</button>
         </div>
       </div>
+
       <div style={{ display: 'flex', gap: '20px' }}>
         <div style={{ width: '350px', height: '600px' }}>
           {rolActual === 'ADMIN' && <VistaAdmin infoEmpresa={infoEmpresa} taxis={taxis} mejorTaxi={mejorTaxi} registrarTaxi={registrarTaxi} eliminarTaxi={eliminarTaxi} simulacionActiva={simulacionActiva} intervalo={intervalo} actualizarSimulacion={actualizarSimulacion} />}
+          
+          {/* PASAMOS LA LISTA DE CLIENTES A LA VISTA CLIENTE */}
           {rolActual === 'CLIENTE' && <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} clientes={clientes} />}
+          
           {rolActual === 'TAXI' && <VistaTaxista taxis={taxis} miIdTaxi={miIdTaxi} setMiIdTaxi={setMiIdTaxi} />}
           <div style={{marginTop: 10, fontSize: 12, color: '#999'}}>Log: {mensaje}</div>
         </div>
+
         <div style={{ width: mapSize }}>
           <div style={clockContainerStyle}>
              <span>MAPA DE LA CIUDAD</span>
@@ -179,6 +189,7 @@ export default function App() {
                <div style={digitalClockStyle}>{tiempoSimulado}</div>
              </div>
           </div>
+
           <div style={{ position: 'relative', width: mapSize, height: mapSize, background: '#eee', border: '3px solid #333' }}>
             {taxis.map(taxi => (
               <div key={taxi.id} style={{
