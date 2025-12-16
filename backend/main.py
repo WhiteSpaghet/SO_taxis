@@ -76,18 +76,25 @@ def crear_taxi(datos: TaxiRegistro):
 
 @app.post("/solicitar_viaje")
 def solicitar(datos: SolicitudViaje):
-    # Usamos el módulo sistema para procesar
-    taxi = sistema.procesar_solicitud(
+    resultado = sistema.procesar_solicitud(
         datos.cliente_id, 
         datos.origen_x, datos.origen_y, 
         datos.destino_x, datos.destino_y
     )
     
-    if not taxi:
-        return {"resultado": "No hay taxis disponibles"}
+    # Manejo de Errores Específicos
+    if resultado == "ID_INVALIDO":
+        return {"resultado": "Error: El ID debe ser positivo."}
     
+    if resultado == "CLIENTE_OCUPADO":
+        return {"resultado": f"Error: El usuario {datos.cliente_id} ya tiene un viaje."}
+        
+    if resultado == "SIN_TAXIS":
+        return {"resultado": "No hay taxis disponibles cerca (2km)."}
+    
+    # Si llegamos aquí, es que 'resultado' es un objeto Taxi válido
     return {
         "resultado": "Taxi asignado",
-        "taxi_id": taxi.id,
-        "modelo": taxi.modelo
+        "taxi_id": resultado.id,
+        "modelo": resultado.modelo
     }

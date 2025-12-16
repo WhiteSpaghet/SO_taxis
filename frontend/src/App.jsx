@@ -47,6 +47,7 @@ const VistaCliente = ({ miIdCliente, setMiIdCliente, solicitarViaje, mensaje }) 
       <label>Tu ID de Usuario:</label>
       <input 
         type="number" 
+        min="1"
         value={miIdCliente} 
         onChange={(e) => setMiIdCliente(e.target.value)}
         style={{width: '50px', marginLeft: 10}}
@@ -177,6 +178,7 @@ export default function App() {
           }
           {rolActual === 'CLIENTE' && 
             <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} />
+            
           }
           {rolActual === 'TAXI' && 
             <VistaTaxista taxis={taxis} miIdTaxi={miIdTaxi} setMiIdTaxi={setMiIdTaxi} />

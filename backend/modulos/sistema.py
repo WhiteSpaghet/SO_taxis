@@ -41,46 +41,45 @@ class SistemaUnieTaxi:
         return nuevo_cliente
 
     def procesar_solicitud(self, cliente_id, ox, oy, dx, dy):
-        """Algoritmo de Match Cliente-Taxi con Bloqueo de Estado"""
+        """Algoritmo de Match Cliente-Taxi con Validaciones"""
         
-        # 1. VALIDACIÓN DE ESTADO (Process Locking)
-        # Si el ID del cliente ya está en la lista de "viajando", se rechaza.
+        # 1. VALIDACIÓN DE ID NEGATIVO
+        if cliente_id <= 0:
+            return "ID_INVALIDO"
+
+        # 2. VALIDACIÓN DE ESTADO (Usuario ya viaja)
         if cliente_id in self.clientes_viajando:
-            print(f"[SISTEMA] Solicitud rechazada: Cliente {cliente_id} ya tiene un viaje en curso.")
-            return None 
+            return "CLIENTE_OCUPADO" 
 
         mejor_taxi = None
         distancia_minima = float('inf')
 
-        # 2. SECCIÓN CRÍTICA (Búsqueda de recursos)
+        # 3. SECCIÓN CRÍTICA (Buscar taxi)
         with self.mutex_taxis:
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
                     dist = math.sqrt((taxi.x - ox)**2 + (taxi.y - oy)**2)
                     
-                    if dist <= 20: # Radio de cobertura 20 unidades
+                    if dist <= 20: 
                         if dist < distancia_minima:
                             distancia_minima = dist
                             mejor_taxi = taxi
                         elif dist == distancia_minima:
-                            # Desempate por calificación
                             if taxi.calificacion > mejor_taxi.calificacion:
                                 mejor_taxi = taxi
             
-            # 3. ASIGNACIÓN DE RECURSOS
+            # 4. ASIGNACIÓN
             if mejor_taxi:
                 mejor_taxi.estado = "OCUPADO"
                 mejor_taxi.destino_actual = (dx, dy)
-                
-                # Simulamos recogida inmediata en el origen
                 mejor_taxi.x = ox
                 mejor_taxi.y = oy
-                
-                # Asignamos este cliente al taxi
                 mejor_taxi.cliente_actual = cliente_id 
                 
-                # BLOQUEAMOS AL CLIENTE (Lo añadimos a la lista de ocupados)
+                # Bloqueamos al cliente
                 self.clientes_viajando.add(cliente_id)
+            else:
+                return "SIN_TAXIS" # Devolvemos código específico si no hay coches
         
         return mejor_taxi
 
