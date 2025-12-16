@@ -1,16 +1,13 @@
-// frontend/src/App.jsx
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import './App.css' // Puedes usar el estilo por defecto o borrarlo
+
+/* No importamos CSS aquí para evitar errores */
 
 function App() {
   const [tareas, setTareas] = useState([])
   const [nuevoTitulo, setNuevoTitulo] = useState("")
-
-  // URL de tu Backend
   const API_URL = "http://127.0.0.1:8000"
 
-  // 1. Función para cargar datos desde Python
   const cargarTareas = async () => {
     try {
       const respuesta = await axios.get(`${API_URL}/tareas`)
@@ -20,66 +17,41 @@ function App() {
     }
   }
 
-  // 2. Función para enviar datos a Python
   const manejarEnvio = async (e) => {
-    e.preventDefault() // Evita que la página se recargue
+    e.preventDefault()
     if (!nuevoTitulo) return
-
     try {
       await axios.post(`${API_URL}/tareas`, {
         titulo: nuevoTitulo,
         completada: false
       })
-      setNuevoTitulo("") // Limpiar input
-      cargarTareas()     // Recargar la lista para ver el cambio
+      setNuevoTitulo("")
+      cargarTareas()
     } catch (error) {
-      console.error("Error creando tarea:", error)
+      console.error("Error:", error)
     }
   }
 
-  // Se ejecuta automáticamente al abrir la página
   useEffect(() => {
     cargarTareas()
   }, [])
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Gestor de Tareas (React + Python)</h1>
-
-      {/* Formulario */}
-      <form onSubmit={manejarEnvio} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+      <h1>Gestor de Tareas</h1>
+      <form onSubmit={manejarEnvio} style={{ marginBottom: '20px' }}>
         <input 
-          type="text" 
           value={nuevoTitulo}
           onChange={(e) => setNuevoTitulo(e.target.value)}
-          placeholder="Escribe una nueva tarea..."
-          style={{ flex: 1, padding: '10px', fontSize: '16px' }}
+          placeholder="Nueva tarea..."
         />
-        <button type="submit" style={{ padding: '10px 20px', cursor: 'pointer' }}>
-          Agregar
-        </button>
+        <button type="submit">Agregar</button>
       </form>
-
-      {/* Lista */}
-      <div style={{ background: '#f4f4f4', padding: '20px', borderRadius: '8px' }}>
-        {tareas.length === 0 ? <p>Cargando tareas...</p> : (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {tareas.map((tarea) => (
-              <li key={tarea.id} style={{ 
-                background: 'white', 
-                margin: '10px 0', 
-                padding: '10px', 
-                borderLeft: tarea.completada ? '5px solid green' : '5px solid orange',
-                display: 'flex',
-                justifyContent: 'space-between'
-              }}>
-                <span>{tarea.titulo}</span>
-                <small>{tarea.completada ? "Hecho" : "Pendiente"}</small>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <ul>
+        {tareas.map((t) => (
+          <li key={t.id}>{t.titulo}</li>
+        ))}
+      </ul>
     </div>
   )
 }
