@@ -51,45 +51,57 @@ def motor_fisica():
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
 
-# --- HILO 2: SIMULADOR INTELIGENTE (AUTO-ESCALADO) ---
+# --- HILO 2: SIMULADOR CON CURVA DE SATURACIÓN ---
 def simulador_clientes():
+    # CONFIGURACIÓN DE POBLACIÓN
+    POBLACION_IDEAL = 50 # El sistema intentará estabilizarse en torno a este número
+    
     while True:
         if SIMULACION_ACTIVA:
             cliente_id_seleccionado = None
             
-            # 1. FILTRAR: ¿Quién está libre ahora mismo?
+            # 1. DATOS ACTUALES
+            total_clientes = len(sistema.clientes)
             clientes_libres = [c for c in sistema.clientes if c.id not in sistema.clientes_viajando]
             
+            # 2. CÁLCULO DE PROBABILIDAD DINÁMICA
+            # Calculamos qué tan probable es reutilizar a alguien basado en cuántos somos.
+            # - Si somos 0: prob_reuso = 0.0 (0%) -> Todo nuevo
+            # - Si somos 25: prob_reuso = 0.5 (50%) -> Mitad y mitad
+            # - Si somos 50+: prob_reuso = 0.95 (95%) -> Casi siempre reusamos
+            
+            if total_clientes == 0:
+                prob_reuso = 0
+            else:
+                prob_reuso = min(0.95, total_clientes / POBLACION_IDEAL)
+
+            # 3. TOMA DE DECISIÓN
             usar_existente = False
-            
-            # 2. TOMA DE DECISIÓN
+
             if len(clientes_libres) == 0:
-                # CASO A: ¡Saturación! Todos están viajando.
-                # Generamos cliente nuevo OBLIGATORIAMENTE para no detener el ritmo.
+                # CASO A: Saturación total (Nadie libre).
+                # Obligamos a crear nuevo aunque seamos muchos, para no parar el tráfico.
                 usar_existente = False
-                print("[AUTO] ⚠️ Todos los clientes están ocupados. Generando cliente de refuerzo...")
+                print(f"[AUTO] ⚠️ Saturación ({total_clientes} activos). Creando refuerzo.")
             
-            elif random.random() < 0.7:
-                # CASO B: Hay gente libre y el azar (70%) dice que reutilicemos.
+            elif random.random() < prob_reuso:
+                # CASO B: La probabilidad dice que REUSEMOS (porque ya somos muchos)
                 usar_existente = True
             
             else:
-                # CASO C: Hay gente libre, pero el azar (30%) dice que entre gente nueva.
+                # CASO C: La probabilidad dice NUEVO (somos pocos o hubo suerte)
                 usar_existente = False
 
-            # 3. EJECUCIÓN
+            # 4. EJECUCIÓN
             if usar_existente:
-                # Elegimos uno al azar de los libres
                 cliente = random.choice(clientes_libres)
                 cliente_id_seleccionado = cliente.id
-                print(f"[AUTO] 🔄 Cliente recurrente {cliente.nombre} (ID {cliente.id}) pide viaje.")
+                print(f"[AUTO] ♻️ ({int(prob_reuso*100)}% Reuso) Cliente {cliente.id} vuelve a viajar.")
             else:
-                # Creamos uno nuevo
                 nuevo = sistema.registrar_cliente(f"Bot_{random.randint(1000,9999)}", "VISA")
                 cliente_id_seleccionado = nuevo.id
-                print(f"[AUTO] ✨ Cliente NUEVO registrado: {nuevo.nombre} (ID {nuevo.id}).")
+                print(f"[AUTO] ✨ ({int((1-prob_reuso)*100)}% Nuevo) Bienvenido Cliente {nuevo.id}.")
 
-            # 4. LANZAR SOLICITUD AL SISTEMA
             sistema.procesar_solicitud(
                 cliente_id_seleccionado,
                 random.uniform(0, 100), random.uniform(0, 100),
@@ -98,7 +110,7 @@ def simulador_clientes():
             
             time.sleep(INTERVALO_GENERACION) 
         else:
-            time.sleep(1)
+            time.sleep(0.1)
 
 hilo_simulacion = threading.Thread(target=simulador_clientes, daemon=True)
 hilo_simulacion.start()
