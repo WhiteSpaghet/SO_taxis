@@ -12,8 +12,8 @@ const btnStyle = { width: '100%', padding: '10px', color: 'white', border: 'none
 const tabActive = { padding: '10px 20px', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '5px 5px 0 0', fontWeight: 'bold' }
 const tabInactive = { padding: '10px 20px', cursor: 'pointer', background: '#eee', color: '#666', border: 'none', borderRadius: '5px 5px 0 0' }
 
-// Componente ADMIN con botón de Simulación
-const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi, simulacionActiva, toggleSimulacion }) => (
+// Componente ADMIN Actualizado
+const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi, simulacionActiva, intervalo, actualizarSimulacion }) => (
   <div style={panelStyle}>
     <h3>👮‍♂️ Panel de Administración</h3>
     
@@ -21,17 +21,33 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
       <p>Ganancia Total: <strong>${infoEmpresa.ganancia}</strong></p>
       <p>Viajes Totales: <strong>{infoEmpresa.viajes}</strong></p>
       
-      {/* BOTÓN DE SIMULACIÓN AUTOMÁTICA */}
+      {/* CONTROLES DE SIMULACIÓN */}
       <div style={{marginTop: 10, paddingTop: 10, borderTop: '1px solid #eee'}}>
         <button 
-          onClick={() => toggleSimulacion(!simulacionActiva)}
+          onClick={() => actualizarSimulacion({ activa: !simulacionActiva })}
           style={{...btnStyle, background: simulacionActiva ? '#6f42c1' : '#6c757d'}}
         >
           {simulacionActiva ? '🛑 DETENER SIMULACIÓN' : '🤖 INICIAR SIMULACIÓN AUTO'}
         </button>
-        <small style={{color: '#666'}}>
-          {simulacionActiva ? "Generando clientes automáticamente..." : "Modo Manual"}
-        </small>
+        
+        {/* SLIDER DE VELOCIDAD */}
+        <div style={{marginTop: 10}}>
+          <label style={{fontSize: 12, fontWeight: 'bold', color: '#555'}}>Velocidad de Generación:</label>
+          <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+            <span style={{fontSize: 12}}>🚀 Rápido</span>
+            <input 
+              type="range" 
+              min="0.5" max="5.0" step="0.5"
+              value={intervalo}
+              onChange={(e) => actualizarSimulacion({ intervalo: parseFloat(e.target.value) })}
+              style={{flex: 1}}
+            />
+            <span style={{fontSize: 12}}>🐢 Lento</span>
+          </div>
+          <p style={{textAlign: 'center', fontSize: 11, color: '#666', margin: 0}}>
+            (Nuevo cliente cada <strong>{intervalo}s</strong>)
+          </p>
+        </div>
       </div>
       
       <hr style={{margin: '10px 0', border: '0', borderTop: '1px solid #eee'}}/>
@@ -114,7 +130,10 @@ export default function App() {
   const [taxis, setTaxis] = useState([])
   const [infoEmpresa, setInfoEmpresa] = useState({ ganancia: 0, viajes: 0 })
   const [mejorTaxi, setMejorTaxi] = useState(null)
-  const [simulacionActiva, setSimulacionActiva] = useState(false) // Estado simulación
+  
+  // Estado Simulación
+  const [simulacionActiva, setSimulacionActiva] = useState(false)
+  const [intervalo, setIntervalo] = useState(3.0) 
   
   const [rolActual, setRolActual] = useState('ADMIN') 
   const [mensaje, setMensaje] = useState("Sistema iniciado.")
@@ -122,16 +141,20 @@ export default function App() {
   const [miIdCliente, setMiIdCliente] = useState(1)
 
   useEffect(() => {
-    const intervalo = setInterval(async () => {
+    const intervaloId = setInterval(async () => {
       try {
         const res = await axios.get(`${API_URL}/estado`)
         setTaxis(res.data.taxis)
         setInfoEmpresa({ ganancia: res.data.empresa_ganancia, viajes: res.data.viajes })
         setMejorTaxi(res.data.mejor_taxi)
+        
+        // Sincronizamos estado con el backend
         setSimulacionActiva(res.data.simulacion_activa)
+        // Solo actualizamos intervalo si no lo estamos arrastrando (opcional, pero simple así funciona bien)
+        // setIntervalo(res.data.intervalo_generacion) <-- Si descomentas esto, se fuerza lo del server
       } catch (e) { console.error("Conectando...") }
     }, 500)
-    return () => clearInterval(intervalo)
+    return () => clearInterval(intervaloId)
   }, [])
 
   const registrarTaxi = async () => {
@@ -148,11 +171,14 @@ export default function App() {
     } catch (error) { alert("No se pudo eliminar: " + error.response.data.detail) }
   }
 
-  // --- NUEVA FUNCIÓN PARA ACTIVAR SIMULACIÓN ---
-  const toggleSimulacion = async (activar) => {
+  // FUNCIÓN CENTRALIZADA PARA CONFIGURAR SIMULACIÓN
+  const actualizarSimulacion = async (config) => {
+    // Actualizamos visualmente rápido
+    if (config.activa !== undefined) setSimulacionActiva(config.activa)
+    if (config.intervalo !== undefined) setIntervalo(config.intervalo)
+
     try {
-      await axios.post(`${API_URL}/simulacion/toggle`, { activa: activar })
-      setMensaje(activar ? "Simulación INICIADA" : "Simulación DETENIDA")
+      await axios.post(`${API_URL}/simulacion/config`, config)
     } catch (e) { console.error(e) }
   }
 
@@ -181,7 +207,9 @@ export default function App() {
             <VistaAdmin 
               infoEmpresa={infoEmpresa} taxis={taxis} mejorTaxi={mejorTaxi} 
               registrarTaxi={registrarTaxi} eliminarTaxi={eliminarTaxi}
-              simulacionActiva={simulacionActiva} toggleSimulacion={toggleSimulacion}
+              simulacionActiva={simulacionActiva} 
+              intervalo={intervalo}
+              actualizarSimulacion={actualizarSimulacion}
             />
           }
           {rolActual === 'CLIENTE' && <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} />}

@@ -4,6 +4,7 @@ import random
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional # <--- IMPORTANTE
 from modulos.sistema import SistemaUnieTaxi
 
 app = FastAPI()
@@ -16,40 +17,44 @@ app.add_middleware(
 )
 
 sistema = SistemaUnieTaxi()
-SIMULACION_ACTIVA = False
 
-# --- HILO MOTOR FISICO (Versión Básica) ---
+# --- ESTADO DE LA SIMULACIÓN ---
+SIMULACION_ACTIVA = False
+INTERVALO_GENERACION = 3.0 # Segundos por defecto entre clientes
+
+# --- HILO 1: MOTOR FÍSICO ---
 def motor_fisica():
     while True:
         try:
             with sistema.mutex_taxis:
-                # Buscamos taxis con trabajo
                 taxis_activos = [t for t in sistema.taxis if t.estado == "OCUPADO" and t.destino_actual]
             
-            # Velocidad alta para provocar el fallo visual
-            velocidad = 5.0 if SIMULACION_ACTIVA else 2.0
+            # Velocidad alta si simulación activa
+            velocidad = 8.0 if SIMULACION_ACTIVA else 2.0
 
             for taxi in taxis_activos:
                 dest_x, dest_y = taxi.destino_actual
-                
-                # Movemos
-                llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
-                
-                if llegado:
-                    with sistema.mutex_taxis:
-                        taxi.estado = "LIBRE"
-                        taxi.destino_actual = None
-                    sistema.finalizar_viaje(taxi, random.uniform(10, 50))
+                try:
+                    # Usamos la lógica de frenado perfecto que ya tienes en taxi.py
+                    llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
+                    
+                    if llegado:
+                        with sistema.mutex_taxis:
+                            taxi.estado = "LIBRE"
+                            taxi.destino_actual = None
+                        sistema.finalizar_viaje(taxi, random.uniform(10, 50))
+                except Exception as e:
+                    print(f"Error taxi {taxi.id}: {e}")
         
         except Exception as e:
             print(f"Error motor: {e}")
         
-        time.sleep(0.5) # Ritmo de actualización
+        time.sleep(0.5)
 
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
 
-# --- HILO SIMULADOR (Genera clientes) ---
+# --- HILO 2: SIMULADOR DE CLIENTES (ACTUALIZADO) ---
 def simulador_clientes():
     while True:
         if SIMULACION_ACTIVA:
@@ -59,14 +64,17 @@ def simulador_clientes():
                 random.uniform(0, 100), random.uniform(0, 100),
                 random.uniform(0, 100), random.uniform(0, 100)
             )
-            time.sleep(random.uniform(1, 3))
+            print(f"[AUTO] Cliente {nuevo_cliente.id} generado.")
+            
+            # --- AQUÍ USAMOS LA VELOCIDAD VARIABLE ---
+            time.sleep(INTERVALO_GENERACION) 
         else:
             time.sleep(1)
 
 hilo_simulacion = threading.Thread(target=simulador_clientes, daemon=True)
 hilo_simulacion.start()
 
-# --- ENDPOINTS RESTO DEL ARCHIVO (Mantén tus endpoints igual) ---
+# --- MODELOS DE DATOS ---
 class TaxiRegistro(BaseModel):
     modelo: str
     placa: str
@@ -78,8 +86,12 @@ class SolicitudViaje(BaseModel):
     destino_x: float
     destino_y: float
 
-class EstadoSimulacion(BaseModel):
-    activa: bool
+# Modelo flexible para configuración
+class ConfigSimulacion(BaseModel):
+    activa: Optional[bool] = None
+    intervalo: Optional[float] = None
+
+# --- ENDPOINTS ---
 
 @app.get("/estado")
 def ver_estado():
@@ -93,7 +105,8 @@ def ver_estado():
         "empresa_ganancia": round(sistema.ganancia_empresa, 2),
         "viajes": sistema.viajes_totales,
         "mejor_taxi": mejor_taxi,
-        "simulacion_activa": SIMULACION_ACTIVA
+        "simulacion_activa": SIMULACION_ACTIVA,
+        "intervalo_generacion": INTERVALO_GENERACION # Enviamos el dato al frontend
     }
 
 @app.post("/taxis")
@@ -116,8 +129,16 @@ def solicitar(datos: SolicitudViaje):
     if res == "SIN_TAXIS": return {"resultado": "No hay taxis."}
     return {"resultado": "Asignado", "taxi_id": res.id}
 
-@app.post("/simulacion/toggle")
-def toggle_simulacion(estado: EstadoSimulacion):
-    global SIMULACION_ACTIVA
-    SIMULACION_ACTIVA = estado.activa
-    return {"mensaje": "OK"}
+# --- NUEVO ENDPOINT DE CONFIGURACIÓN ---
+@app.post("/simulacion/config")
+def configurar_simulacion(config: ConfigSimulacion):
+    global SIMULACION_ACTIVA, INTERVALO_GENERACION
+    
+    if config.activa is not None:
+        SIMULACION_ACTIVA = config.activa
+        
+    if config.intervalo is not None:
+        # Limitamos para que no sea 0 y cuelgue el PC
+        INTERVALO_GENERACION = max(0.1, config.intervalo)
+        
+    return {"mensaje": "Configuración actualizada", "activa": SIMULACION_ACTIVA, "intervalo": INTERVALO_GENERACION}
