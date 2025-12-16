@@ -11,14 +11,17 @@ class SistemaUnieTaxi:
         self.ganancia_empresa = 0.0
         self.viajes_totales = 0
         
+        # --- CONTROL DE ESTADO DE PROCESOS (NUEVO) ---
+        # Este conjunto (Set) almacena los IDs de los clientes que están ocupados.
+        # Funciona como un bloqueo lógico para el usuario.
+        self.clientes_viajando = set() 
+
         # --- RECURSOS CRÍTICOS Y SINCRONIZACIÓN ---
-        # Semáforo para la lista de taxis (evita asignar el mismo taxi a dos clientes)
         self.mutex_taxis = threading.Lock()
-        # Semáforo para la contabilidad (evita errores de suma en las ganancias)
         self.mutex_contabilidad = threading.Lock()
 
     def registrar_taxi(self, modelo, placa):
-        # Verificación de antecedentes (simulada)
+        # Simulamos verificación de antecedentes (10% fallo)
         if random.random() < 0.1: return None
         
         nuevo_taxi = Taxi(
@@ -33,17 +36,23 @@ class SistemaUnieTaxi:
         return nuevo_taxi
 
     def registrar_cliente(self, nombre, tarjeta):
-        # Aquí podrías verificar la tarjeta
         nuevo_cliente = Cliente(len(self.clientes)+1, nombre, tarjeta)
         self.clientes.append(nuevo_cliente)
         return nuevo_cliente
 
     def procesar_solicitud(self, cliente_id, ox, oy, dx, dy):
-        """Algoritmo de Match Cliente-Taxi con Sección Crítica"""
+        """Algoritmo de Match Cliente-Taxi con Bloqueo de Estado"""
+        
+        # 1. VALIDACIÓN DE ESTADO (Process Locking)
+        # Si el ID del cliente ya está en la lista de "viajando", se rechaza.
+        if cliente_id in self.clientes_viajando:
+            print(f"[SISTEMA] Solicitud rechazada: Cliente {cliente_id} ya tiene un viaje en curso.")
+            return None 
+
         mejor_taxi = None
         distancia_minima = float('inf')
 
-        # -- INICIO SECCIÓN CRÍTICA --
+        # 2. SECCIÓN CRÍTICA (Búsqueda de recursos)
         with self.mutex_taxis:
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
@@ -58,18 +67,33 @@ class SistemaUnieTaxi:
                             if taxi.calificacion > mejor_taxi.calificacion:
                                 mejor_taxi = taxi
             
+            # 3. ASIGNACIÓN DE RECURSOS
             if mejor_taxi:
                 mejor_taxi.estado = "OCUPADO"
                 mejor_taxi.destino_actual = (dx, dy)
-                # Teletransportamos al taxi al origen para iniciar el viaje
+                
+                # Simulamos recogida inmediata en el origen
                 mejor_taxi.x = ox
                 mejor_taxi.y = oy
-        # -- FIN SECCIÓN CRÍTICA --
+                
+                # Asignamos este cliente al taxi
+                mejor_taxi.cliente_actual = cliente_id 
+                
+                # BLOQUEAMOS AL CLIENTE (Lo añadimos a la lista de ocupados)
+                self.clientes_viajando.add(cliente_id)
         
         return mejor_taxi
 
     def finalizar_viaje(self, taxi, costo):
-        """Cierre contable de un viaje individual"""
+        """Cierre contable y liberación de recursos"""
+        
+        # 1. LIBERACIÓN DEL PROCESO CLIENTE
+        # Si el taxi traía un cliente, lo desbloqueamos
+        if taxi.cliente_actual in self.clientes_viajando:
+            self.clientes_viajando.remove(taxi.cliente_actual)
+            taxi.cliente_actual = None # Limpiamos el taxi
+
+        # 2. SECCIÓN CRÍTICA CONTABLE
         with self.mutex_contabilidad:
             comision = costo * 0.20
             pago_taxi = costo - comision
@@ -78,7 +102,6 @@ class SistemaUnieTaxi:
             self.ganancia_empresa += comision
             self.viajes_totales += 1
             
-            # Auditoría aleatoria (Requisito: 5 servicios diarios)
-            # Simplificado: auditamos cada 5 viajes
+            # Auditoría aleatoria (1 de cada 5 viajes)
             if self.viajes_totales % 5 == 0:
                 print(f"[AUDITORÍA CALIDAD] Revisando viaje del Taxi {taxi.placa}...")
