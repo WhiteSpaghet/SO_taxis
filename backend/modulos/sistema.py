@@ -17,9 +17,7 @@ class SistemaUnieTaxi:
         self.contador_id_cliente = 0
         self.clientes_viajando = set() 
 
-        # Control de tiempo para contrataciones
-        self.ultimo_refuerzo = datetime.min # Nunca se ha contratado
-        
+        self.ultimo_refuerzo = datetime.min
         self.tiempo_actual = datetime(2025, 12, 12, 6, 0, 0) 
 
         self.mutex_taxis = threading.RLock() 
@@ -28,45 +26,50 @@ class SistemaUnieTaxi:
     def tick_tiempo(self):
         self.tiempo_actual += timedelta(minutes=20)
 
-    # --- GERENTE MUY RÁPIDO (2 por segundo) ---
+    # --- NUEVA FUNCIÓN: EL DESPACHADOR ---
+    def procesar_despacho_automatico(self):
+        """
+        Revisa constantemente si hay Taxis Libres Y Clientes en Cola 
+        para asignarlos inmediatamente.
+        """
+        with self.mutex_taxis:
+            # Si no hay nadie esperando, no hacemos nada
+            if not self.cola_espera:
+                return
+
+            # Buscamos todos los taxis libres
+            taxis_libres = [t for t in self.taxis if t.estado == "LIBRE"]
+            
+            # Mientras haya taxis libres Y gente en la cola...
+            while taxis_libres and self.cola_espera:
+                # Cogemos el primer taxi libre y le asignamos trabajo
+                taxi = taxis_libres.pop(0)
+                self.asignar_trabajo_de_cola(taxi)
+                print(f"[DESPACHO] Taxi {taxi.id} activado desde estado LIBRE para atender cola.")
+
     def gestionar_abastecimiento(self):
-        """
-        Revisa la cola y contrata refuerzos RÁPIDAMENTE.
-        Reglas:
-        1. Solo si hay 5+ personas esperando.
-        2. Límite de flota ampliado a 20.
-        3. Velocidad: 2 taxis por segundo (0.5s de espera).
-        """
         LIMITE_FLOTA = 20 
-        TIEMPO_ENTRE_CONTRATACIONES = 0.5 # <--- 0.5s = 2 taxis por segundo
-        
+        TIEMPO_ENTRE_CONTRATACIONES = 0.5 
         ahora_real = datetime.now() 
 
         with self.mutex_taxis:
-            # CHECK 1: Límite de flota
-            if len(self.taxis) >= LIMITE_FLOTA:
-                return 
-
-            # CHECK 2: Cooldown (Ahora es solo medio segundo)
+            if len(self.taxis) >= LIMITE_FLOTA: return 
+            
             segundos_pasados = (ahora_real - self.ultimo_refuerzo).total_seconds()
-            if segundos_pasados < TIEMPO_ENTRE_CONTRATACIONES:
-                return 
+            if segundos_pasados < TIEMPO_ENTRE_CONTRATACIONES: return 
 
-            # CHECK 3: Emergencia de cola
             if len(self.cola_espera) >= 5:
                 print(f"[GERENCIA] ⚡ Contratación Exprés. Cola: {len(self.cola_espera)}")
-                
                 self.registrar_taxi("Refuerzo-Flash", f"R-{random.randint(100,999)}")
                 self.ultimo_refuerzo = ahora_real
 
     def registrar_taxi(self, modelo, placa):
         self.contador_id_taxi += 1
         nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, float(random.uniform(0, 100)), float(random.uniform(0, 100)))
-        
         with self.mutex_taxis:
             self.taxis.append(nuevo_taxi)
+            # Intenta coger trabajo nada más nacer
             self.asignar_trabajo_de_cola(nuevo_taxi)
-            
         return nuevo_taxi
 
     def registrar_cliente(self, nombre, tarjeta):
@@ -108,9 +111,11 @@ class SistemaUnieTaxi:
         self.clientes_viajando.add(cliente_id)
 
     def asignar_trabajo_de_cola(self, taxi):
+        # Esta función debe estar protegida por mutex externo o interno
+        # Como la llamamos desde sitios que ya tienen mutex, no ponemos 'with mutex' aquí
         if self.cola_espera:
             siguiente = self.cola_espera.pop(0) 
-            print(f"[COLA] Taxi {taxi.id} rescata al Cliente {siguiente['cliente_id']}")
+            # print(f"[COLA] Taxi {taxi.id} asignado a Cliente {siguiente['cliente_id']}")
             self._asignar_viaje(
                 taxi, siguiente["cliente_id"], 
                 siguiente["ox"], siguiente["oy"], 
