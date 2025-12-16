@@ -23,23 +23,31 @@ SIMULACION_ACTIVA = False
 # --- HILO 1: MOTOR FÍSICO (Mueve los taxis) ---
 def motor_fisica():
     while True:
-        with sistema.mutex_taxis:
-            for taxi in sistema.taxis:
-                if taxi.estado == "OCUPADO" and taxi.destino_actual:
-                    dest_x, dest_y = taxi.destino_actual
-                    # Si estamos en modo simulación, los taxis van más rápido (velocidad 5 vs 2)
-                    velocidad = 5 if SIMULACION_ACTIVA else 2 
-                    
-                    llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
-                    if llegado:
-                        taxi.estado = "LIBRE"
-                        taxi.destino_actual = None
-                        costo_viaje = random.uniform(10, 50)
-                        sistema.finalizar_viaje(taxi, costo_viaje)
+        try:
+            # Usamos el bloqueo para leer/escribir seguros
+            with sistema.mutex_taxis:
+                for taxi in sistema.taxis:
+                    if taxi.estado == "OCUPADO" and taxi.destino_actual:
+                        dest_x, dest_y = taxi.destino_actual
+                        
+                        # Velocidad variable según simulación
+                        velocidad = 5 if SIMULACION_ACTIVA else 2 
+                        
+                        # Movemos el taxi
+                        llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
+                        
+                        if llegado:
+                            taxi.estado = "LIBRE"
+                            taxi.destino_actual = None
+                            # Calculamos costo y pagamos
+                            costo_viaje = random.uniform(10, 50)
+                            sistema.finalizar_viaje(taxi, costo_viaje)
+                            
+        except Exception as e:
+            # Si algo falla, lo imprimimos pero NO matamos el hilo
+            print(f"[ERROR MOTOR FÍSICO]: {e}")
+        
         time.sleep(0.5)
-
-hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
-hilo_motor.start()
 
 # --- HILO 2: GENERADOR AUTOMÁTICO DE CLIENTES (Modo Simulación) ---
 def simulador_clientes():
